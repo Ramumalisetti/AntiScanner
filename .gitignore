@@ -1,0 +1,23 @@
+# Frontend dependencies and builds
+dashboard/node_modules/
+dashboard/dist/
+dashboard/dist-ssr/
+dashboard/local.properties
+
+# Python cache and temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local CSV outputs
+smc_scanner_results.csv
+*.csv
+
+# Editor/OS temporary files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
