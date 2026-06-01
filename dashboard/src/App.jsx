@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   Shield, 
@@ -15,7 +15,8 @@ import {
   AlertTriangle,
   ExternalLink,
   Calendar,
-  DollarSign
+  DollarSign,
+  Loader
 } from 'lucide-react';
 import './App.css';
 
@@ -427,6 +428,35 @@ const STOCKS_DATA = {
 
 function App() {
   const [activeTab, setActiveTab] = useState('darvas');
+  const [liveData, setLiveData] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState('');
+
+  const runLiveScan = async () => {
+    setIsScanning(true);
+    setScanStatus('Scanning Darvas Universe...');
+    try {
+      const resD = await fetch('http://127.0.0.1:5000/api/scan/darvas?limit=20');
+      const dataD = await resD.json();
+      
+      setScanStatus('Scanning SMC Setups...');
+      const resS = await fetch('http://127.0.0.1:5000/api/scan/smc?limit=20');
+      const dataS = await resS.json();
+      
+      setLiveData({
+        darvas: dataD.data,
+        smc: dataS.data
+      });
+      setScanStatus('Scan Complete!');
+      setTimeout(() => setScanStatus(''), 3000);
+    } catch (err) {
+      console.error(err);
+      setScanStatus('Error connecting to API. Is backend running?');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const [capital, setCapital] = useState(100000);
   const [riskPercent, setRiskPercent] = useState(1);
   const [concorExpiryPrice, setConcorExpiryPrice] = useState(463.85);
