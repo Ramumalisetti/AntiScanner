@@ -417,6 +417,229 @@ h1 {
   z-index: 1;
 }
 
+/* ── History Section ────────────────────────────────── */
+.history-section {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 1.2rem 1.5rem;
+  margin-top: 2.5rem;
+  animation: fadeIn .3s ease;
+}
+
+.history-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.history-section-header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clear-hist-btn {
+  background: rgba(245, 96, 96, 0.08);
+  color: var(--red);
+  border: 1px solid rgba(245, 96, 96, 0.2);
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.clear-hist-btn:hover {
+  background: rgba(245, 96, 96, 0.16);
+  border-color: var(--red);
+  transform: translateY(-1px);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 1.2rem;
+  animation: fadeIn .2s ease;
+}
+
+.history-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.01);
+  transition: border-color 0.2s ease;
+}
+
+.history-item:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1.2rem;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.02);
+  transition: background 0.2s ease;
+}
+
+.history-item-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.history-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-icon {
+  font-size: 1rem;
+}
+
+.history-time {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.history-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-count-badge {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  background: rgba(0, 229, 160, 0.1);
+  color: var(--green);
+  border: 1px solid rgba(0, 229, 160, 0.2);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.history-arrow {
+  font-size: 0.7rem;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+}
+
+.history-item-body {
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 1.2rem;
+  animation: fadeIn .2s ease;
+}
+
+.history-picks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.history-pick-row {
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.01);
+  border-radius: 8px;
+  padding: 1rem;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.history-pick-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.history-pick-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0.8rem;
+}
+
+.history-pick-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.h-sym {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #fff;
+}
+
+.h-sector {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.h-score {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.history-pick-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--tx);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 0.8rem;
+  border: 1px solid var(--border);
+}
+
+.history-pick-details span {
+  color: var(--muted);
+}
+
+.history-pick-details strong {
+  color: #fff;
+}
+
+.history-pick-thesis {
+  font-size: 0.8rem;
+  color: var(--tx);
+  line-height: 1.5;
+}
+
+.history-empty-msg {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 2rem 0;
+}
+
 /* ── Responsive ─────────────────────────────────── */
 @media (max-width: 640px) {
   .hdr-top { flex-direction: column; align-items: flex-start; }

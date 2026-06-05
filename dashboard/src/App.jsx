@@ -130,10 +130,120 @@ function Spinner() {
   );
 }
 
+function HistoryItem({ record }) {
+  const [open, setOpen] = useState(false);
+  
+  return (
+    <div className={`history-item ${open ? 'open' : ''}`}>
+      <div className="history-item-header" onClick={() => setOpen(!open)}>
+        <div className="history-header-left">
+          <span className="history-icon">📅</span>
+          <span className="history-time">{record.scan_time}</span>
+        </div>
+        <div className="history-header-right">
+          <span className="history-count-badge">{record.picks.length} picks</span>
+          <span className="history-arrow">{open ? '▲' : '▼'}</span>
+        </div>
+      </div>
+      
+      {open && (
+        <div className="history-item-body">
+          <div className="history-picks-list">
+            {record.picks.map((pick) => (
+              <div key={pick.sym} className="history-pick-row">
+                <div className="history-pick-header">
+                  <div className="history-pick-left">
+                    <span className="h-sym">{pick.sym}</span>
+                    <span className="h-sector">{pick.sector}</span>
+                  </div>
+                  <span className="h-score">Score: {pick.score}/10</span>
+                </div>
+                <div className="history-pick-details">
+                  <span>Price: <strong>{fmt(pick.price)}</strong></span>
+                  <span>RSI: <strong style={{color: pick.rsi < 35 ? '#00e5a0' : '#f5c842'}}>{pick.rsi}</strong></span>
+                  <span>Entry: <strong style={{color: '#00e5a0'}}>{fmt(pick.entry)}</strong></span>
+                  <span>SL: <strong style={{color: '#f56060'}}>{fmt(pick.stop_loss)}</strong></span>
+                  <span>Target (5%): <strong style={{color: '#6ee7b7'}}>{fmt(pick.t1)}</strong></span>
+                </div>
+                <div className="history-pick-thesis">
+                  <p>{pick.thesis}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HistorySection({ historyData, onClear }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="history-section">
+      <div className="history-section-header" onClick={() => setIsExpanded(!isExpanded)}>
+        <h3>📜 Scan History Logs ({historyData.length})</h3>
+        <div className="history-section-actions" onClick={(e) => e.stopPropagation()}>
+          {historyData.length > 0 && (
+            <button className="clear-hist-btn" onClick={onClear}>Clear Logs</button>
+          )}
+          <span className="expand-toggle" style={{cursor: 'pointer', marginLeft: '10px'}} onClick={() => setIsExpanded(!isExpanded)}>
+            {isExpanded ? '▲' : '▼'}
+          </span>
+        </div>
+      </div>
+      
+      {isExpanded && (
+        <div className="history-list">
+          {historyData.length === 0 ? (
+            <div className="history-empty-msg">
+              No history recorded yet. Run a scan to save results.
+            </div>
+          ) : (
+            historyData.map((record, i) => (
+              <HistoryItem key={record.scan_time + i} record={record} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState('idle');
   const [data,  setData]  = useState(null);
   const [err,   setErr]   = useState('');
+  const [history, setHistory] = useState([]);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch(`${API}/api/history`);
+      if (res.ok) {
+        const json = await res.json();
+        setHistory(json);
+      }
+    } catch (e) {
+      console.error("Failed to fetch history", e);
+    }
+  };
+
+  const clearHistory = async () => {
+    if (!window.confirm("Are you sure you want to clear history?")) return;
+    try {
+      const res = await fetch(`${API}/api/history/clear`, { method: 'POST' });
+      if (res.ok) {
+        setHistory([]);
+      }
+    } catch (e) {
+      console.error("Failed to clear history", e);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchHistory();
+  }, []);
 
   const runScan = async () => {
     setState('loading');
@@ -144,6 +254,7 @@ export default function App() {
       const json = await res.json();
       setData(json);
       setState('done');
+      fetchHistory();
     } catch (e) {
       setErr('Cannot connect to API. Start python api.py');
       setState('error');
@@ -209,6 +320,8 @@ export default function App() {
             )}
           </>
         )}
+
+        <HistorySection historyData={history} onClear={clearHistory} />
       </main>
     </div>
   );

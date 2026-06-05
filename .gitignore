@@ -21,3 +21,7 @@ smc_scanner_results.csv
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local scan data and universe cache
+history.json
+universe.json
