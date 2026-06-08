@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import './App.css';
 
-const API = 'http://127.0.0.1:5000';
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://127.0.0.1:5000'
+  : window.location.origin;
 
 const fmt = (n) => typeof n === 'number' ? `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
