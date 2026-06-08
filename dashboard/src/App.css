@@ -88,21 +88,73 @@ h1 {
   display: flex;
   align-items: center;
   gap: .5rem;
-  padding: .65rem 1.4rem;
+  padding: .6rem 1.2rem;
   background: var(--green);
   color: #000;
   border: none;
   border-radius: 8px;
   font-weight: 700;
-  font-size: .95rem;
+  font-size: .85rem;
   cursor: pointer;
   transition: transform .15s, box-shadow .15s, opacity .15s;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.scan-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,229,160,.35); }
+.scan-btn:hover:not(:disabled) { transform: translateY(-1px); }
 .scan-btn:disabled { opacity: .7; cursor: not-allowed; }
-.scan-btn.scanning { background: var(--panel2); color: var(--green); border: 1px solid var(--green); }
+
+.scan-buttons-row {
+  display: flex;
+  gap: .8rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Confluence button (green) */
+.scan-btn-confluence {
+  background: var(--green);
+  color: #000;
+}
+.scan-btn-confluence:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(0,229,160,.35); }
+.scan-btn-confluence.scanning {
+  background: rgba(0,229,160,.08);
+  color: var(--green);
+  border: 1px solid rgba(0,229,160,.4);
+}
+
+/* Priyank button (blue) */
+.scan-btn-priyank {
+  background: #3b82f6;
+  color: #fff;
+}
+.scan-btn-priyank:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(59,130,246,.35); }
+.scan-btn-priyank.scanning {
+  background: rgba(59,130,246,.08);
+  color: #3b82f6;
+  border: 1px solid rgba(59,130,246,.4);
+}
+
+/* DarvaX button (purple) */
+.scan-btn-darvax {
+  background: #9d7cfc;
+  color: #fff;
+}
+.scan-btn-darvax:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(157,124,252,.35); }
+.scan-btn-darvax.scanning {
+  background: rgba(157,124,252,.08);
+  color: #9d7cfc;
+  border: 1px solid rgba(157,124,252,.4);
+}
+
+.strategy-idle-msg {
+  text-align: center;
+  padding: 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  border: 1px dashed var(--border2);
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
 
 /* ── Main ────────────────────────────────────────── */
 .main { max-width: 1280px; margin: 0 auto; padding: 2rem 1.5rem 4rem; position: relative; z-index: 1; }
@@ -640,9 +692,101 @@ h1 {
   padding: 2rem 0;
 }
 
-/* ── Analyst Section & Cards ───────────────────────── */
-.analyst-section {
-  animation: fadeIn .3s ease;
+/* ── Strategy Sections ─────────────────────────── */
+.strategy-section {
+  margin-top: 2.5rem;
+  animation: fadeIn .4s ease;
+}
+
+.strategy-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem 1.5rem;
+  border-radius: 14px;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.strategy-header-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.strategy-header h2 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.strategy-sub {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 2px 0 0;
+}
+
+.strategy-count-pill {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 229, 160, 0.25);
+  background: rgba(0, 229, 160, 0.08);
+  color: var(--green);
+}
+
+/* Confluence Header (green) */
+.confluence-header {
+  border-color: rgba(0, 229, 160, 0.15);
+  background: linear-gradient(135deg, rgba(0, 229, 160, 0.04) 0%, var(--panel) 100%);
+}
+
+.confluence-header .strategy-header-icon {
+  background: rgba(0, 229, 160, 0.1);
+}
+
+/* Priyank Header (blue) */
+.priyank-header {
+  border-color: rgba(59, 130, 246, 0.15);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, var(--panel) 100%);
+}
+
+.priyank-header .strategy-header-icon {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.priyank-pill {
+  border-color: rgba(59, 130, 246, 0.25) !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+  color: var(--blue) !important;
+}
+
+/* DarvaX Header (purple) */
+.darvax-header {
+  border-color: rgba(157, 124, 252, 0.15);
+  background: linear-gradient(135deg, rgba(157, 124, 252, 0.04) 0%, var(--panel) 100%);
+}
+
+.darvax-header .strategy-header-icon {
+  background: rgba(157, 124, 252, 0.1);
+}
+
+.darvax-pill {
+  border-color: rgba(157, 124, 252, 0.25) !important;
+  background: rgba(157, 124, 252, 0.08) !important;
+  color: var(--purple) !important;
 }
 
 .analyst-card {
@@ -685,6 +829,10 @@ h1 {
 /* ── Responsive ─────────────────────────────────── */
 @media (max-width: 640px) {
   .hdr-top { flex-direction: column; align-items: flex-start; }
+  .scan-buttons-row { flex-direction: column; }
+  .scan-buttons-row .scan-btn { width: 100%; justify-content: center; }
+  .strategy-header { flex-direction: column; align-items: flex-start; }
+  .strategy-count-pill { margin-left: 0; }
   .cards-grid { grid-template-columns: 1fr; }
   .levels-grid { grid-template-columns: repeat(3, 1fr); }
   .levels-grid .level-item.rr { grid-column: span 2; }

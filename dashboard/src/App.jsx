@@ -50,7 +50,7 @@ function ScoreRing({ score }) {
   );
 }
 
-function TradeCard({ pick, rank }) {
+function ConfluenceCard({ pick, rank }) {
   const badges = { 1: '🥇', 2: '🥈', 3: '🥉' };
   const riskPct = pick.price > 0 ? ((pick.entry - pick.stop_loss) / pick.entry * 100).toFixed(1) : 0;
 
@@ -120,136 +120,7 @@ function TradeCard({ pick, rank }) {
   );
 }
 
-function Spinner() {
-  return (
-    <div className="spinner-wrap">
-      <svg className="spin" width="48" height="48" viewBox="0 0 48 48">
-        <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,.1)" strokeWidth="4" />
-        <circle cx="24" cy="24" r="20" fill="none" stroke="#00e5a0" strokeWidth="4"
-          strokeDasharray="40 88" strokeLinecap="round" />
-      </svg>
-    </div>
-  );
-}
-
-function HistoryItem({ record }) {
-  const [open, setOpen] = useState(false);
-  
-  return (
-    <div className={`history-item ${open ? 'open' : ''}`}>
-      <div className="history-item-header" onClick={() => setOpen(!open)}>
-        <div className="history-header-left">
-          <span className="history-icon">📅</span>
-          <span className="history-time">{record.scan_time}</span>
-        </div>
-        <div className="history-header-right">
-          <span className="history-count-badge">{record.picks.length} picks</span>
-          <span className="history-arrow">{open ? '▲' : '▼'}</span>
-        </div>
-      </div>
-      
-      {open && (
-        <div className="history-item-body">
-          <div className="history-picks-list">
-            {record.picks.map((pick) => (
-              <div key={pick.sym} className="history-pick-row">
-                <div className="history-pick-header">
-                  <div className="history-pick-left">
-                    <span className="h-sym">{pick.sym}</span>
-                    <span className="h-sector">{pick.sector}</span>
-                  </div>
-                  <span className="h-score">Score: {pick.score}/10</span>
-                </div>
-                <div className="history-pick-details">
-                  <span>Price: <strong>{fmt(pick.price)}</strong></span>
-                  <span>RSI: <strong style={{color: pick.rsi < 35 ? '#00e5a0' : '#f5c842'}}>{pick.rsi}</strong></span>
-                  <span>Entry: <strong style={{color: '#00e5a0'}}>{fmt(pick.entry)}</strong></span>
-                  <span>SL: <strong style={{color: '#f56060'}}>{fmt(pick.stop_loss)}</strong></span>
-                  <span>Target (5%): <strong style={{color: '#6ee7b7'}}>{fmt(pick.t1)}</strong></span>
-                </div>
-                <div className="history-pick-thesis">
-                  <p>{pick.thesis}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {(record.priyank_pick || record.darvax_pick) && (
-            <div className="history-analyst-section" style={{marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '15px'}}>
-              <h4 style={{fontSize: '0.9rem', color: '#fff', marginBottom: '10px'}}>⚡ Featured Analyst Picks</h4>
-              <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-                {record.priyank_pick && (
-                  <div className="history-analyst-row">
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px'}}>
-                      <span style={{fontSize: '0.82rem'}}>🙋‍♂️ <strong>Priyank Sharma:</strong> <strong style={{color: '#fff'}}>{record.priyank_pick.sym}</strong> ({record.priyank_pick.sector})</span>
-                      <span className="history-count-badge" style={{background: 'rgba(59,130,246,0.1)', color: '#3b82f6', borderColor: 'rgba(59,130,246,0.2)'}}>Score: {record.priyank_pick.score}</span>
-                    </div>
-                    <div className="history-pick-details">
-                      <span>Price: <strong>{fmt(record.priyank_pick.price)}</strong></span>
-                      <span>Entry: <strong>{fmt(record.priyank_pick.trade?.entry)}</strong></span>
-                      <span>SL: <strong>{fmt(record.priyank_pick.trade?.sl)}</strong></span>
-                      <span>T2 Target: <strong>{fmt(record.priyank_pick.trade?.t2)}</strong></span>
-                    </div>
-                  </div>
-                )}
-                {record.darvax_pick && (
-                  <div className="history-analyst-row">
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px'}}>
-                      <span style={{fontSize: '0.82rem'}}>📈 <strong>AmitabhJha3:</strong> <strong style={{color: '#fff'}}>{record.darvax_pick.sym}</strong> ({record.darvax_pick.sector})</span>
-                      <span className="history-count-badge" style={{background: 'rgba(157,124,252,0.1)', color: '#9d7cfc', borderColor: 'rgba(157,124,252,0.2)'}}>Grade {record.darvax_pick.grade} ({record.darvax_pick.score})</span>
-                    </div>
-                    <div className="history-pick-details">
-                      <span>Price: <strong>{fmt(record.darvax_pick.price)}</strong></span>
-                      <span>Entry: <strong>{fmt(record.darvax_pick.trade?.entry)}</strong></span>
-                      <span>SL: <strong>{fmt(record.darvax_pick.trade?.sl)}</strong></span>
-                      <span>T2 Target: <strong>{fmt(record.darvax_pick.trade?.t2)}</strong></span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HistorySection({ historyData, onClear }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <div className="history-section">
-      <div className="history-section-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <h3>📜 Scan History Logs ({historyData.length})</h3>
-        <div className="history-section-actions" onClick={(e) => e.stopPropagation()}>
-          {historyData.length > 0 && (
-            <button className="clear-hist-btn" onClick={onClear}>Clear Logs</button>
-          )}
-          <span className="expand-toggle" style={{cursor: 'pointer', marginLeft: '10px'}} onClick={() => setIsExpanded(!isExpanded)}>
-            {isExpanded ? '▲' : '▼'}
-          </span>
-        </div>
-      </div>
-      
-      {isExpanded && (
-        <div className="history-list">
-          {historyData.length === 0 ? (
-            <div className="history-empty-msg">
-              No history recorded yet. Run a scan to save results.
-            </div>
-          ) : (
-            historyData.map((record, i) => (
-              <HistoryItem key={record.scan_time + i} record={record} />
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AnalystTradeCard({ pick, analystName, badgeText, colorClass }) {
+function AnalystCard({ pick, analystName, badgeText, colorClass }) {
   const t = pick.trade || {};
   const isPriyank = analystName === "Priyank Sharma";
   const signals = pick.signals || [];
@@ -348,10 +219,143 @@ function AnalystTradeCard({ pick, analystName, badgeText, colorClass }) {
   );
 }
 
+function Spinner() {
+  return (
+    <div className="spinner-wrap">
+      <svg className="spin" width="48" height="48" viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,.1)" strokeWidth="4" />
+        <circle cx="24" cy="24" r="20" fill="none" stroke="#00e5a0" strokeWidth="4"
+          strokeDasharray="40 88" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+}
+
+function MiniSpinner({ color }) {
+  return (
+    <svg className="spin" width="20" height="20" viewBox="0 0 20 20" style={{display: 'inline-block', verticalAlign: 'middle'}}>
+      <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="2.5" />
+      <circle cx="10" cy="10" r="8" fill="none" stroke={color} strokeWidth="2.5"
+        strokeDasharray="16 36" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/* ── History Components ── */
+const STRATEGY_META = {
+  confluence: { label: '🎯 Confluence', color: '#00e5a0', bg: 'rgba(0,229,160,0.08)', border: 'rgba(0,229,160,0.2)' },
+  priyank:    { label: '🙋‍♂️ Priyank',   color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.2)' },
+  darvax:     { label: '📈 DarvaX',     color: '#9d7cfc', bg: 'rgba(157,124,252,0.08)', border: 'rgba(157,124,252,0.2)' },
+};
+
+function HistoryItem({ record }) {
+  const [open, setOpen] = useState(false);
+  const strat = STRATEGY_META[record.strategy] || STRATEGY_META.confluence;
+  
+  return (
+    <div className={`history-item ${open ? 'open' : ''}`}>
+      <div className="history-item-header" onClick={() => setOpen(!open)}>
+        <div className="history-header-left">
+          <span className="history-icon">📅</span>
+          <span className="history-time">{record.scan_time}</span>
+          <span className="history-count-badge" style={{background: strat.bg, color: strat.color, borderColor: strat.border}}>{strat.label}</span>
+        </div>
+        <div className="history-header-right">
+          <span className="history-count-badge">{record.picks?.length || 0} picks</span>
+          <span className="history-arrow">{open ? '▲' : '▼'}</span>
+        </div>
+      </div>
+      
+      {open && (
+        <div className="history-item-body">
+          <div className="history-picks-list">
+            {(record.picks || []).map((pick) => (
+              <div key={pick.sym} className="history-pick-row">
+                <div className="history-pick-header">
+                  <div className="history-pick-left">
+                    <span className="h-sym">{pick.sym}</span>
+                    <span className="h-sector">{pick.sector}</span>
+                  </div>
+                  <span className="h-score" style={{color: strat.color}}>Score: {pick.score}</span>
+                </div>
+                <div className="history-pick-details">
+                  <span>Price: <strong>{fmt(pick.price)}</strong></span>
+                  {record.strategy === 'confluence' ? (
+                    <>
+                      <span>RSI: <strong style={{color: pick.rsi < 35 ? '#00e5a0' : '#f5c842'}}>{pick.rsi}</strong></span>
+                      <span>Entry: <strong style={{color: '#00e5a0'}}>{fmt(pick.entry)}</strong></span>
+                      <span>SL: <strong style={{color: '#f56060'}}>{fmt(pick.stop_loss)}</strong></span>
+                      <span>Target: <strong style={{color: '#6ee7b7'}}>{fmt(pick.t1)}</strong></span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Entry: <strong style={{color: strat.color}}>{fmt(pick.trade?.entry)}</strong></span>
+                      <span>SL: <strong style={{color: '#f56060'}}>{fmt(pick.trade?.sl)}</strong></span>
+                      <span>T2: <strong style={{color: '#6ee7b7'}}>{fmt(pick.trade?.t2)}</strong></span>
+                    </>
+                  )}
+                </div>
+                {record.strategy === 'confluence' && pick.thesis && (
+                  <div className="history-pick-thesis"><p>{pick.thesis}</p></div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HistorySection({ historyData, onClear }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="history-section">
+      <div className="history-section-header" onClick={() => setIsExpanded(!isExpanded)}>
+        <h3>📜 Scan History Logs ({historyData.length})</h3>
+        <div className="history-section-actions" onClick={(e) => e.stopPropagation()}>
+          {historyData.length > 0 && (
+            <button className="clear-hist-btn" onClick={onClear}>Clear Logs</button>
+          )}
+          <span className="expand-toggle" style={{cursor: 'pointer', marginLeft: '10px'}} onClick={() => setIsExpanded(!isExpanded)}>
+            {isExpanded ? '▲' : '▼'}
+          </span>
+        </div>
+      </div>
+      
+      {isExpanded && (
+        <div className="history-list">
+          {historyData.length === 0 ? (
+            <div className="history-empty-msg">
+              No history recorded yet. Run a scan to save results.
+            </div>
+          ) : (
+            historyData.map((record, i) => (
+              <HistoryItem key={record.scan_time + record.strategy + i} record={record} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Main App ── */
 export default function App() {
-  const [state, setState] = useState('idle');
-  const [data,  setData]  = useState(null);
-  const [err,   setErr]   = useState('');
+  // Independent state per strategy
+  const [confState, setConfState] = useState('idle');
+  const [confData,  setConfData]  = useState(null);
+  const [confErr,   setConfErr]   = useState('');
+
+  const [priyState, setPriyState] = useState('idle');
+  const [priyData,  setPriyData]  = useState(null);
+  const [priyErr,   setPriyErr]   = useState('');
+
+  const [darvState, setDarvState] = useState('idle');
+  const [darvData,  setDarvData]  = useState(null);
+  const [darvErr,   setDarvErr]   = useState('');
+
   const [history, setHistory] = useState([]);
 
   const fetchHistory = async () => {
@@ -370,31 +374,33 @@ export default function App() {
     if (!window.confirm("Are you sure you want to clear history?")) return;
     try {
       const res = await fetch(`${API}/api/history/clear`, { method: 'POST' });
-      if (res.ok) {
-        setHistory([]);
-      }
+      if (res.ok) setHistory([]);
     } catch (e) {
       console.error("Failed to clear history", e);
     }
   };
 
-  React.useEffect(() => {
-    fetchHistory();
-  }, []);
+  React.useEffect(() => { fetchHistory(); }, []);
 
-  const runScan = async () => {
-    setState('loading');
-    setErr('');
+  const runScan = async (strategy) => {
+    const setters = {
+      confluence: { setState: setConfState, setData: setConfData, setErr: setConfErr },
+      priyank:    { setState: setPriyState, setData: setPriyData, setErr: setPriyErr },
+      darvax:     { setState: setDarvState, setData: setDarvData, setErr: setDarvErr },
+    };
+    const s = setters[strategy];
+    s.setState('loading');
+    s.setErr('');
     try {
-      const res  = await fetch(`${API}/api/scan`);
+      const res = await fetch(`${API}/api/scan?strategy=${strategy}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      setData(json);
-      setState('done');
+      s.setData(json);
+      s.setState('done');
       fetchHistory();
     } catch (e) {
-      setErr('Cannot connect to API. Start python api.py');
-      setState('error');
+      s.setErr('Cannot connect to API. Start python api.py');
+      s.setState('error');
     }
   };
 
@@ -404,90 +410,154 @@ export default function App() {
         <div className="hdr-inner">
           <div className="hdr-top">
             <div>
-              <div className="hdr-badge" style={{color:'#00e5a0', borderColor:'rgba(0,229,160,.3)'}}>&gt;70% WIN RATE STRATEGY</div>
-              <h1>High-Probability Radar</h1>
+              <h1>Multi-Strategy Stock Scanner</h1>
               <p className="hdr-sub">
-                Scanning Nifty 500 for deep oversold pullbacks in massive macro uptrends. Wide stops. High Win Rates.
+                3 independent strategies scanning Nifty 500. Run each separately.
               </p>
             </div>
-            <button className={`scan-btn ${state === 'loading' ? 'scanning' : ''}`} onClick={runScan} disabled={state === 'loading'}>
-              {state === 'loading' ? <Spinner /> : <>⚡ Find 70% Setups</>}
+          </div>
+
+          {/* ── 3 Independent Scan Buttons ── */}
+          <div className="scan-buttons-row">
+            <button
+              className={`scan-btn scan-btn-confluence ${confState === 'loading' ? 'scanning' : ''}`}
+              onClick={() => runScan('confluence')}
+              disabled={confState === 'loading'}
+            >
+              {confState === 'loading' ? <><MiniSpinner color="#00e5a0" /> Scanning…</> : <>🎯 70% Radar</>}
+            </button>
+            <button
+              className={`scan-btn scan-btn-priyank ${priyState === 'loading' ? 'scanning' : ''}`}
+              onClick={() => runScan('priyank')}
+              disabled={priyState === 'loading'}
+            >
+              {priyState === 'loading' ? <><MiniSpinner color="#3b82f6" /> Scanning…</> : <>🙋‍♂️ Hold with Priyank</>}
+            </button>
+            <button
+              className={`scan-btn scan-btn-darvax ${darvState === 'loading' ? 'scanning' : ''}`}
+              onClick={() => runScan('darvax')}
+              disabled={darvState === 'loading'}
+            >
+              {darvState === 'loading' ? <><MiniSpinner color="#9d7cfc" /> Scanning…</> : <>📈 DarvaX Analysis</>}
             </button>
           </div>
         </div>
       </header>
 
       <main className="main">
-        {state === 'idle' && (
-          <div className="empty-state">
-            <div className="empty-icon">🎯</div>
-            <h2>Ready to find high-probability bounces</h2>
-            <p>Click <strong>Find 70% Setups</strong> to scan the Nifty 500 for deep RSI pullbacks in 200-EMA uptrends.</p>
-          </div>
-        )}
-        {state === 'loading' && (
-          <div className="loading-state">
-            <Spinner />
-            <h2>Scanning 500 Stocks for Oversold Pullbacks…</h2>
-          </div>
-        )}
-        {state === 'error' && (
-          <div className="error-state">
-            <h2>Connection Failed</h2>
-            <p>{err}</p>
-            <button className="scan-btn" onClick={runScan}>Retry</button>
-          </div>
-        )}
-        {state === 'done' && data && (
-          <>
-            <NiftyBanner data={data.nifty50} />
-            <div className="scan-meta">
-              <span>🕐 {data.scan_time}</span>
-              <span>📊 Processed: {data.scanned}</span>
-              <span>✅ 70%+ Setups Found: {data.found}</span>
+        {/* ── Section 1: Confluence (70% Radar) ── */}
+        <StrategySection
+          title="Confluence — 70% Win Rate Radar"
+          subtitle="Oversold RSI pullbacks in 200-EMA uptrends with demand zone confluence"
+          icon="🎯"
+          headerClass="confluence-header"
+          pillClass=""
+          state={confState}
+          data={confData}
+          err={confErr}
+          renderCards={(data) => (
+            <div className="cards-grid">
+              {data.picks.map((pick, i) => <ConfluenceCard key={pick.sym} pick={pick} rank={i + 1} />)}
             </div>
-            {data.picks.length === 0 ? (
-              <div className="no-picks">
-                <h2>No Extreme Oversold Setups Today</h2>
-              </div>
-            ) : (
-              <div className="cards-grid">
-                {data.picks.map((pick, i) => <TradeCard key={pick.sym} pick={pick} rank={i + 1} />)}
-              </div>
-            )}
+          )}
+        />
 
-            {/* Featured Analyst Setups Section */}
-            {(data.priyank_pick || data.darvax_pick) && (
-              <div className="analyst-section" style={{marginTop: '3rem'}}>
-                <div className="picks-header" style={{marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.8rem'}}>
-                  <h2>⚡ Featured Analyst Picks</h2>
-                  <p style={{color: 'var(--muted)', fontSize: '0.85rem'}}>Top momentum and breakout plays configured by specialist traders.</p>
-                </div>
-                <div className="cards-grid">
-                  {data.priyank_pick && (
-                    <AnalystTradeCard 
-                      pick={data.priyank_pick} 
-                      analystName="Priyank Sharma" 
-                      badgeText="Priyank Sharma Methodology" 
-                      colorClass="priyank-card"
-                    />
-                  )}
-                  {data.darvax_pick && (
-                    <AnalystTradeCard 
-                      pick={data.darvax_pick} 
-                      analystName="AmitabhJha3" 
-                      badgeText="AmitabhJha3 DarvaX" 
-                      colorClass="darvax-card"
-                    />
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        {/* ── Section 2: Hold with Priyank ── */}
+        <StrategySection
+          title="Hold with Priyank"
+          subtitle="Momentum breakouts with volume confirmation — Priyank Sharma methodology"
+          icon="🙋‍♂️"
+          headerClass="priyank-header"
+          pillClass="priyank-pill"
+          state={priyState}
+          data={priyData}
+          err={priyErr}
+          renderCards={(data) => (
+            <div className="cards-grid">
+              {data.picks.map((pick, i) => (
+                <AnalystCard key={pick.sym} pick={pick} analystName="Priyank Sharma" badgeText="Priyank Sharma" colorClass="priyank-card" />
+              ))}
+            </div>
+          )}
+        />
+
+        {/* ── Section 3: DarvaX Analysis ── */}
+        <StrategySection
+          title="DarvaX — AmitabhJha3"
+          subtitle="Darvas box breakout detection — AmitabhJha3 stock analysis"
+          icon="📈"
+          headerClass="darvax-header"
+          pillClass="darvax-pill"
+          state={darvState}
+          data={darvData}
+          err={darvErr}
+          renderCards={(data) => (
+            <div className="cards-grid">
+              {data.picks.map((pick, i) => (
+                <AnalystCard key={pick.sym} pick={pick} analystName="AmitabhJha3" badgeText="AmitabhJha3 DarvaX" colorClass="darvax-card" />
+              ))}
+            </div>
+          )}
+        />
 
         <HistorySection historyData={history} onClear={clearHistory} />
       </main>
+    </div>
+  );
+}
+
+/* ── Reusable Strategy Section ── */
+function StrategySection({ title, subtitle, icon, headerClass, pillClass, state, data, err, renderCards }) {
+  return (
+    <div className="strategy-section">
+      <div className={`strategy-header ${headerClass}`}>
+        <div className="strategy-header-icon">{icon}</div>
+        <div>
+          <h2>{title}</h2>
+          <p className="strategy-sub">{subtitle}</p>
+        </div>
+        {state === 'done' && data && (
+          <span className={`strategy-count-pill ${pillClass}`}>{data.found} found · {data.picks.length} shown · {data.elapsed}s</span>
+        )}
+      </div>
+
+      {state === 'idle' && (
+        <div className="strategy-idle-msg">
+          Click the button above to scan.
+        </div>
+      )}
+
+      {state === 'loading' && (
+        <div className="loading-state">
+          <Spinner />
+          <h2>Scanning 500 Stocks…</h2>
+        </div>
+      )}
+
+      {state === 'error' && (
+        <div className="error-state">
+          <h2>Connection Failed</h2>
+          <p>{err}</p>
+        </div>
+      )}
+
+      {state === 'done' && data && (
+        <>
+          <NiftyBanner data={data.nifty50} />
+          <div className="scan-meta">
+            <span>🕐 {data.scan_time}</span>
+            <span>📊 Scanned: {data.scanned}</span>
+            <span>✅ Found: {data.found}</span>
+          </div>
+          {data.picks.length === 0 ? (
+            <div className="no-picks">
+              <h2>No Setups Found Today</h2>
+            </div>
+          ) : (
+            renderCards(data)
+          )}
+        </>
+      )}
     </div>
   );
 }

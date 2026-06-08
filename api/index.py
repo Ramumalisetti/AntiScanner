@@ -257,7 +257,7 @@ def convert_numpy(obj):
 # ─────────────────────────────────────────────
 HISTORY_FILE = '/tmp/history.json' if 'VERCEL' in os.environ else 'history.json'
 
-def save_to_history(scan_time, scanned, found, picks, nifty, priyank_pick=None, darvax_pick=None):
+def save_to_history(scan_time, scanned, found, picks, nifty, strategy="confluence"):
     try:
         history = []
         if os.path.exists(HISTORY_FILE):
@@ -273,20 +273,15 @@ def save_to_history(scan_time, scanned, found, picks, nifty, priyank_pick=None, 
             
         record = {
             "scan_time": scan_time,
+            "strategy": strategy,
             "scanned": scanned,
             "found": found,
             "picks": picks,
             "nifty50": nifty,
-            "priyank_pick": priyank_pick,
-            "darvax_pick": darvax_pick
         }
         
-        if history and history[0].get("scan_time") == scan_time:
-            history[0] = record
-        else:
-            history.insert(0, record)
-            
-        history = history[:50]
+        history.insert(0, record)
+        history = history[:100]
         
         # Ensure directory exists
         os.makedirs(os.path.dirname(os.path.abspath(HISTORY_FILE)), exist_ok=True)
@@ -297,10 +292,64 @@ def save_to_history(scan_time, scanned, found, picks, nifty, priyank_pick=None, 
         print(f"Error saving history: {e}")
 
 # ─────────────────────────────────────────────
-# CACHE SYSTEM (1-Hour Cache)
+# INDIVIDUAL STRATEGY WORKERS
 # ─────────────────────────────────────────────
-SCAN_CACHE = None
-CACHE_TIMESTAMP = 0
+def analyze_confluence_worker(stock):
+    try:
+        ticker = yf.Ticker(stock["yf"])
+        df = ticker.history(period="1y", interval="1d", auto_adjust=True)
+        if df.empty or len(df) < 200:
+            return None
+        return analyze_confluence_logic(df, stock)
+    except:
+        return None
+
+def analyze_priyank_worker(stock):
+    if not priyank_analyze:
+        return None
+    try:
+        ticker = yf.Ticker(stock["yf"])
+        df = ticker.history(period="1y", interval="1d", auto_adjust=True)
+        if df.empty or len(df) < 100:
+            return None
+        df_lower = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+        df_lower.columns = ["open", "high", "low", "close", "volume"]
+        pa = priyank_analyze(df_lower, stock)
+        if pa and pa.get("trade") and pa.get("score", 0) >= 15:
+            pa["sym"] = stock["sym"]
+            pa["sector"] = stock["sector"]
+            return pa
+    except:
+        pass
+    return None
+
+def analyze_darvax_worker(stock):
+    if not darvax_analyze:
+        return None
+    try:
+        ticker = yf.Ticker(stock["yf"])
+        df = ticker.history(period="1y", interval="1d", auto_adjust=True)
+        if df.empty or len(df) < 100:
+            return None
+        df_lower = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+        df_lower.columns = ["open", "high", "low", "close", "volume"]
+        da = darvax_analyze(df_lower, stock)
+        if da and da.get("trade") and da.get("score", 0) >= 15:
+            da["sym"] = stock["sym"]
+            da["sector"] = stock["sector"]
+            return da
+    except:
+        pass
+    return None
+
+# ─────────────────────────────────────────────
+# CACHES (per strategy)
+# ─────────────────────────────────────────────
+CACHES = {
+    "confluence": {"data": None, "ts": 0},
+    "priyank":    {"data": None, "ts": 0},
+    "darvax":     {"data": None, "ts": 0},
+}
 CACHE_DURATION = 3600
 
 # ─────────────────────────────────────────────
@@ -308,74 +357,93 @@ CACHE_DURATION = 3600
 # ─────────────────────────────────────────────
 @app.route('/api/scan', methods=['GET'])
 def run_scan():
-    global SCAN_CACHE, CACHE_TIMESTAMP
+    from flask import request
+    strategy = request.args.get('strategy', 'confluence')
     t0 = time.time()
-    
-    # Check cache to avoid Vercel timeouts and rate-limiting
-    if SCAN_CACHE and (t0 - CACHE_TIMESTAMP < CACHE_DURATION):
-        return jsonify(SCAN_CACHE)
 
-    confluence_results = []
-    priyank_results = []
-    darvax_results = []
-
-    with ThreadPoolExecutor(max_workers=30) as ex:
-        futures = {ex.submit(analyze_stock_all_strategies, s): s for s in UNIVERSE}
-        for f in as_completed(futures):
-            r = f.result()
-            if r:
-                if r["confluence"]:
-                    confluence_results.append(r["confluence"])
-                if r["priyank"]:
-                    priyank_results.append(r["priyank"])
-                if r["darvax"]:
-                    darvax_results.append(r["darvax"])
-
-    # 1. Confluence Picks (Top 3)
-    confluence_results.sort(key=lambda x: (-x["score"], x["rsi"], x["sym"]))
-    top3_confluence = confluence_results[:3]
-
-    # 2. Priyank Pick (Best 1)
-    priyank_results.sort(key=lambda x: (-x["score"], -x["vol_ratio"], x["sym"]))
-    best_priyank = priyank_results[0] if priyank_results else None
-
-    # 3. Darvax Pick (Best 1)
-    darvax_results.sort(key=lambda x: (-x["score"], -x["vr"], x["sym"]))
-    best_darvax = darvax_results[0] if darvax_results else None
+    # Check per-strategy cache
+    cache = CACHES.get(strategy, CACHES["confluence"])
+    if cache["data"] and (t0 - cache["ts"] < CACHE_DURATION):
+        return jsonify(cache["data"])
 
     nifty = fetch_market_health()
-    elapsed = round(time.time() - t0, 1)
     scan_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
 
-    response_data = {
-        "status": "success",
-        "scan_time": scan_time,
-        "elapsed": elapsed,
-        "scanned": len(UNIVERSE),
-        "found": len(confluence_results),
-        "nifty50": nifty,
-        "picks": top3_confluence,
-        "priyank_pick": best_priyank,
-        "darvax_pick": best_darvax,
-    }
+    if strategy == "confluence":
+        results = []
+        with ThreadPoolExecutor(max_workers=30) as ex:
+            futures = {ex.submit(analyze_confluence_worker, s): s for s in UNIVERSE}
+            for f in as_completed(futures):
+                r = f.result()
+                if r:
+                    results.append(r)
+        results.sort(key=lambda x: (-x["score"], x["rsi"], x["sym"]))
+        top_picks = results[:3]
+        elapsed = round(time.time() - t0, 1)
+        response_data = {
+            "status": "success",
+            "strategy": "confluence",
+            "scan_time": scan_time,
+            "elapsed": elapsed,
+            "scanned": len(UNIVERSE),
+            "found": len(results),
+            "nifty50": nifty,
+            "picks": top_picks,
+        }
 
-    # Recursive conversion of NumPy types to make them JSON serializable
+    elif strategy == "priyank":
+        results = []
+        with ThreadPoolExecutor(max_workers=30) as ex:
+            futures = {ex.submit(analyze_priyank_worker, s): s for s in UNIVERSE}
+            for f in as_completed(futures):
+                r = f.result()
+                if r:
+                    results.append(r)
+        results.sort(key=lambda x: (-x["score"], -x["vol_ratio"], x["sym"]))
+        top_picks = results[:3]
+        elapsed = round(time.time() - t0, 1)
+        response_data = {
+            "status": "success",
+            "strategy": "priyank",
+            "scan_time": scan_time,
+            "elapsed": elapsed,
+            "scanned": len(UNIVERSE),
+            "found": len(results),
+            "nifty50": nifty,
+            "picks": top_picks,
+        }
+
+    elif strategy == "darvax":
+        results = []
+        with ThreadPoolExecutor(max_workers=30) as ex:
+            futures = {ex.submit(analyze_darvax_worker, s): s for s in UNIVERSE}
+            for f in as_completed(futures):
+                r = f.result()
+                if r:
+                    results.append(r)
+        results.sort(key=lambda x: (-x["score"], -x["vr"], x["sym"]))
+        top_picks = results[:3]
+        elapsed = round(time.time() - t0, 1)
+        response_data = {
+            "status": "success",
+            "strategy": "darvax",
+            "scan_time": scan_time,
+            "elapsed": elapsed,
+            "scanned": len(UNIVERSE),
+            "found": len(results),
+            "nifty50": nifty,
+            "picks": top_picks,
+        }
+    else:
+        return jsonify({"error": "Unknown strategy"}), 400
+
     response_data = convert_numpy(response_data)
 
-    # Save run to daily history file
-    save_to_history(
-        response_data["scan_time"], 
-        response_data["scanned"], 
-        response_data["found"], 
-        response_data["picks"], 
-        response_data["nifty50"], 
-        response_data["priyank_pick"], 
-        response_data["darvax_pick"]
-    )
+    # Save to history
+    save_to_history(scan_time, len(UNIVERSE), response_data["found"], response_data["picks"], nifty, strategy)
 
-    # Update cache
-    SCAN_CACHE = response_data
-    CACHE_TIMESTAMP = time.time()
+    # Update per-strategy cache
+    CACHES[strategy] = {"data": response_data, "ts": time.time()}
 
     return jsonify(response_data)
 
