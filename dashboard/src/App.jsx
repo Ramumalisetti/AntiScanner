@@ -173,6 +173,42 @@ function HistoryItem({ record }) {
               </div>
             ))}
           </div>
+
+          {(record.priyank_pick || record.darvax_pick) && (
+            <div className="history-analyst-section" style={{marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '15px'}}>
+              <h4 style={{fontSize: '0.9rem', color: '#fff', marginBottom: '10px'}}>⚡ Featured Analyst Picks</h4>
+              <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                {record.priyank_pick && (
+                  <div className="history-analyst-row">
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px'}}>
+                      <span style={{fontSize: '0.82rem'}}>🙋‍♂️ <strong>Priyank Sharma:</strong> <strong style={{color: '#fff'}}>{record.priyank_pick.sym}</strong> ({record.priyank_pick.sector})</span>
+                      <span className="history-count-badge" style={{background: 'rgba(59,130,246,0.1)', color: '#3b82f6', borderColor: 'rgba(59,130,246,0.2)'}}>Score: {record.priyank_pick.score}</span>
+                    </div>
+                    <div className="history-pick-details">
+                      <span>Price: <strong>{fmt(record.priyank_pick.price)}</strong></span>
+                      <span>Entry: <strong>{fmt(record.priyank_pick.trade?.entry)}</strong></span>
+                      <span>SL: <strong>{fmt(record.priyank_pick.trade?.sl)}</strong></span>
+                      <span>T2 Target: <strong>{fmt(record.priyank_pick.trade?.t2)}</strong></span>
+                    </div>
+                  </div>
+                )}
+                {record.darvax_pick && (
+                  <div className="history-analyst-row">
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px'}}>
+                      <span style={{fontSize: '0.82rem'}}>📈 <strong>AmitabhJha3:</strong> <strong style={{color: '#fff'}}>{record.darvax_pick.sym}</strong> ({record.darvax_pick.sector})</span>
+                      <span className="history-count-badge" style={{background: 'rgba(157,124,252,0.1)', color: '#9d7cfc', borderColor: 'rgba(157,124,252,0.2)'}}>Grade {record.darvax_pick.grade} ({record.darvax_pick.score})</span>
+                    </div>
+                    <div className="history-pick-details">
+                      <span>Price: <strong>{fmt(record.darvax_pick.price)}</strong></span>
+                      <span>Entry: <strong>{fmt(record.darvax_pick.trade?.entry)}</strong></span>
+                      <span>SL: <strong>{fmt(record.darvax_pick.trade?.sl)}</strong></span>
+                      <span>T2 Target: <strong>{fmt(record.darvax_pick.trade?.t2)}</strong></span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -209,6 +245,105 @@ function HistorySection({ historyData, onClear }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function AnalystTradeCard({ pick, analystName, badgeText, colorClass }) {
+  const t = pick.trade || {};
+  const isPriyank = analystName === "Priyank Sharma";
+  const signals = pick.signals || [];
+  
+  return (
+    <div className={`trade-card analyst-card ${colorClass}`}>
+      <div className="card-head">
+        <div className="card-head-left">
+          <span className="rank-badge" style={{fontSize: '1.2rem'}}>{isPriyank ? '🙋‍♂️' : '📈'}</span>
+          <div>
+            <h2 className="sym">{pick.sym}</h2>
+            <span className="sector-tag">{pick.sector}</span>
+          </div>
+        </div>
+        <div className="score-ring-wrap" style={{alignItems: 'flex-end'}}>
+          <div className="analyst-badge-pill" style={{
+            fontSize: '0.62rem',
+            background: isPriyank ? 'rgba(59,130,246,0.12)' : 'rgba(157,124,252,0.12)',
+            color: isPriyank ? '#3b82f6' : '#9d7cfc',
+            border: `1px solid ${isPriyank ? 'rgba(59,130,246,0.3)' : 'rgba(157,124,252,0.3)'}`,
+            padding: '2px 8px',
+            borderRadius: '4px',
+            fontWeight: 'bold',
+            fontFamily: 'var(--mono)'
+          }}>{badgeText}</div>
+          <span className="score-label" style={{ color: isPriyank ? '#3b82f6' : '#9d7cfc', fontSize: '0.75rem', marginTop: '4px', fontWeight: 'bold' }}>
+            {isPriyank ? `Score: ${pick.score}/100` : `Grade ${pick.grade} (${pick.score}/100)`}
+          </span>
+        </div>
+      </div>
+
+      <div className="price-strip">
+        <div>
+          <div className="ps-label">CMP</div>
+          <div className="ps-val">{fmt(pick.price)}</div>
+        </div>
+        <div>
+          <div className="ps-label">RSI</div>
+          <div className="ps-val" style={{color: pick.rsi < 40 ? '#00e5a0' : '#f5c842'}}>{pick.rsi}</div>
+        </div>
+        <div>
+          <div className="ps-label">Vol Ratio</div>
+          <div className="ps-val">{isPriyank ? pick.vol_ratio : pick.vr}x</div>
+        </div>
+        <div>
+          <div className="ps-label">{isPriyank ? "52W High" : "Darvas Ceiling"}</div>
+          <div className="ps-val">{isPriyank ? fmt(pick.w52h) : fmt(pick.box_ceil || pick.w52h)}</div>
+        </div>
+      </div>
+
+      <div className="chips-row">
+        {signals.slice(0, 3).map((s, idx) => {
+          const type = isPriyank ? s.type : s.t;
+          const label = isPriyank ? s.sig : s.s;
+          const cls = type === 'BULL' ? 'green' : type === 'BEAR' ? 'red' : 'yellow';
+          return <span key={idx} className={`chip ${cls}`}>{label}</span>;
+        })}
+      </div>
+
+      <div className="thesis-box">
+        <div className="thesis-label">TIMING & SETUP ACTION</div>
+        <p className="thesis-text" style={{fontWeight: 700, color: '#fff', marginBottom: '8px'}}>{t.timing}</p>
+        <div className="thesis-label">SIGNALS DETECTED</div>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px'}}>
+          {signals.slice(0, 2).map((s, idx) => (
+            <div key={idx} style={{fontSize: '0.78rem', color: 'var(--tx)', display: 'flex', gap: '6px', alignItems: 'flex-start'}}>
+              <span style={{color: isPriyank ? '#3b82f6' : '#9d7cfc', flexShrink: 0}}>◆</span>
+              <span><strong>{isPriyank ? s.sig : s.s}:</strong> {isPriyank ? s.desc : s.d}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="levels-grid">
+        <div className="level-item entry">
+          <div className="li-label">ENTRY</div>
+          <div className="li-val">{fmt(t.entry)}</div>
+        </div>
+        <div className="level-item sl">
+          <div className="li-label">STOP LOSS</div>
+          <div className="li-val">{fmt(t.sl)}</div>
+          <div className="li-sub">{t.sl_pct}% risk</div>
+        </div>
+        <div className="level-item t1">
+          <div className="li-label">{isPriyank ? "T1 (Fib 61.8)" : "T1 (Range)"}</div>
+          <div className="li-val">{fmt(t.t1)}</div>
+          <div className="li-sub">RR {t.rr1}:1</div>
+        </div>
+        <div className="level-item t2">
+          <div className="li-label">{isPriyank ? "T2 (Preferred)" : "T2 (Target)"}</div>
+          <div className="li-val" style={{color: '#00e5a0'}}>{fmt(t.t2)}</div>
+          <div className="li-sub">RR {t.rr2}:1</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -318,6 +453,34 @@ export default function App() {
             ) : (
               <div className="cards-grid">
                 {data.picks.map((pick, i) => <TradeCard key={pick.sym} pick={pick} rank={i + 1} />)}
+              </div>
+            )}
+
+            {/* Featured Analyst Setups Section */}
+            {(data.priyank_pick || data.darvax_pick) && (
+              <div className="analyst-section" style={{marginTop: '3rem'}}>
+                <div className="picks-header" style={{marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.8rem'}}>
+                  <h2>⚡ Featured Analyst Picks</h2>
+                  <p style={{color: 'var(--muted)', fontSize: '0.85rem'}}>Top momentum and breakout plays configured by specialist traders.</p>
+                </div>
+                <div className="cards-grid">
+                  {data.priyank_pick && (
+                    <AnalystTradeCard 
+                      pick={data.priyank_pick} 
+                      analystName="Priyank Sharma" 
+                      badgeText="Priyank Sharma Methodology" 
+                      colorClass="priyank-card"
+                    />
+                  )}
+                  {data.darvax_pick && (
+                    <AnalystTradeCard 
+                      pick={data.darvax_pick} 
+                      analystName="AmitabhJha3" 
+                      badgeText="AmitabhJha3 DarvaX" 
+                      colorClass="darvax-card"
+                    />
+                  )}
+                </div>
               </div>
             )}
           </>
