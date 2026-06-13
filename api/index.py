@@ -18,11 +18,11 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from smc_swing_trader_scanner import SMCScanner
-    priyank_scanner_instance = SMCScanner(lookback_days=120)
+    from psbb_scanner import psbb_analyze
     priyank_analyze = True
 except Exception as e:
-    print(f"Failed to import SMCScanner: {e}")
+    print(f"Failed to import psbb_scanner: {e}")
+    psbb_analyze = None
     priyank_analyze = None
 
 try:
@@ -313,37 +313,28 @@ def analyze_confluence_worker(stock):
         return None
 
 def analyze_priyank_worker(stock):
+    """PSBB — Priyank Sharma Bread & Butter scanner.
+    Uses SMC: FVG, Order Block, BOS market structure, RSI divergence, 21 EMA.
+    """
     if not priyank_analyze:
         return None
     try:
         ticker = yf.Ticker(stock["yf"])
         df = ticker.history(period="1y", interval="1d", auto_adjust=True)
-        if df.empty or len(df) < 100:
+        if df.empty or len(df) < 60:
             return None
-        
-        # Format df for SMCScanner
+
         df_lower = df[["Open", "High", "Low", "Close", "Volume"]].copy()
         df_lower.columns = ["open", "high", "low", "close", "volume"]
-        
-        # We need atr for identify_entry_stoploss_target
-        df_lower = priyank_scanner_instance.calculate_atr(df_lower)
-        
-        setup = priyank_scanner_instance.identify_entry_stoploss_target(df_lower, stock["sym"])
-        
-        if setup and setup.get("rr_ratio", 0) >= 1.5:
-            return {
-                "sym": stock["sym"],
-                "sector": stock["sector"],
-                "trade": "BUY",  # SMC scanner is primarily long setups
-                "price": setup["current_price"],
-                "score": int(setup["rr_ratio"] * 10 + setup["confluence"] * 10),
-                "desc": f"{setup['setup_type']} (Confluence: {setup['confluence']}/2)",
-                "thesis": f"Entry: {setup['entry_price']}, SL: {setup['stoploss']}, Target: {setup['target1']} (RR: 1:{setup['rr_ratio']})",
-                "vol_ratio": setup.get("volume_ratio", 1.0)
-            }
+
+        result = psbb_analyze(df_lower, stock)
+        if result and result.get("score", 0) >= 36:  # min 2 confluence factors
+            result["sym"] = stock["sym"]
+            result["sector"] = stock["sector"]
+            result["price"] = result["entry"]
+            return result
     except Exception as e:
-        print(f"Priyank worker error: {e}")
-        pass
+        print(f"PSBB worker error ({stock['sym']}): {e}")
     return None
 
 def analyze_darvax_worker(stock):

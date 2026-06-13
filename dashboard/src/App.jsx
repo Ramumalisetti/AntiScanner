@@ -441,7 +441,7 @@ export default function App() {
               onClick={() => runScan('priyank')}
               disabled={priyState === 'loading'}
             >
-              {priyState === 'loading' ? <><MiniSpinner color="#3b82f6" /> Scanning…</> : <>📊 SMC Swing Scan</>}
+              {priyState === 'loading' ? <><MiniSpinner color="#3b82f6" /> Scanning…</> : <>🍞 PSBB Bread &amp; Butter</>}
             </button>
             <button
               className={`scan-btn scan-btn-darvax ${darvState === 'loading' ? 'scanning' : ''}`}
@@ -486,11 +486,11 @@ export default function App() {
           )}
         />
 
-        {/* ── Section 2: Hold with Priyank ── */}
+        {/* ── Section 2: PSBB Bread & Butter (Priyank) ── */}
         <StrategySection
-          title="Hold with Priyank"
-          subtitle="Momentum breakouts with volume confirmation — Priyank Sharma methodology"
-          icon="🙋‍♂️"
+          title="PSBB — Bread & Butter (Priyank Sharma)"
+          subtitle="SMC: BOS market structure + FVG + Order Block + RSI Divergence + 21 EMA retest"
+          icon="🍞"
           headerClass="priyank-header"
           pillClass="priyank-pill"
           state={priyState}
