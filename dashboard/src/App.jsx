@@ -356,9 +356,13 @@ export default function App() {
   const [darvData,  setDarvData]  = useState(null);
   const [darvErr,   setDarvErr]   = useState('');
 
-  const [bosState, setBosState] = useState('idle');
-  const [bosData,  setBosData]  = useState(null);
-  const [bosErr,   setBosErr]   = useState('');
+  const [bosBullState, setBosBullState] = useState('idle');
+  const [bosBullData,  setBosBullData]  = useState(null);
+  const [bosBullErr,   setBosBullErr]   = useState('');
+
+  const [bosBearState, setBosBearState] = useState('idle');
+  const [bosBearData,  setBosBearData]  = useState(null);
+  const [bosBearErr,   setBosBearErr]   = useState('');
 
   const [history, setHistory] = useState([]);
 
@@ -388,10 +392,11 @@ export default function App() {
 
   const runScan = async (strategy) => {
     const setters = {
-      confluence: { setState: setConfState, setData: setConfData, setErr: setConfErr },
-      priyank:    { setState: setPriyState, setData: setPriyData, setErr: setPriyErr },
-      darvax:     { setState: setDarvState, setData: setDarvData, setErr: setDarvErr },
-      boschoch:   { setState: setBosState, setData: setBosData, setErr: setBosErr },
+      confluence:    { setState: setConfState,    setData: setConfData,    setErr: setConfErr },
+      priyank:       { setState: setPriyState,    setData: setPriyData,    setErr: setPriyErr },
+      darvax:        { setState: setDarvState,    setData: setDarvData,    setErr: setDarvErr },
+      boschoch_bull: { setState: setBosBullState, setData: setBosBullData, setErr: setBosBullErr },
+      boschoch_bear: { setState: setBosBearState, setData: setBosBearData, setErr: setBosBearErr },
     };
     const s = setters[strategy];
     s.setState('loading');
@@ -422,7 +427,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* ── 4 Independent Scan Buttons ── */}
+          {/* ── 5 Independent Scan Buttons ── */}
           <div className="scan-buttons-row">
             <button
               className={`scan-btn scan-btn-confluence ${confState === 'loading' ? 'scanning' : ''}`}
@@ -436,7 +441,7 @@ export default function App() {
               onClick={() => runScan('priyank')}
               disabled={priyState === 'loading'}
             >
-              {priyState === 'loading' ? <><MiniSpinner color="#3b82f6" /> Scanning…</> : <>🙋‍♂️ Hold with Priyank</>}
+              {priyState === 'loading' ? <><MiniSpinner color="#3b82f6" /> Scanning…</> : <>📊 SMC Swing Scan</>}
             </button>
             <button
               className={`scan-btn scan-btn-darvax ${darvState === 'loading' ? 'scanning' : ''}`}
@@ -446,11 +451,18 @@ export default function App() {
               {darvState === 'loading' ? <><MiniSpinner color="#9d7cfc" /> Scanning…</> : <>📈 DarvaX Analysis</>}
             </button>
             <button
-              className={`scan-btn scan-btn-boschoch ${bosState === 'loading' ? 'scanning' : ''}`}
-              onClick={() => runScan('boschoch')}
-              disabled={bosState === 'loading'}
+              className={`scan-btn scan-btn-boschoch-bull ${bosBullState === 'loading' ? 'scanning' : ''}`}
+              onClick={() => runScan('boschoch_bull')}
+              disabled={bosBullState === 'loading'}
             >
-              {bosState === 'loading' ? <><MiniSpinner color="#f59e0b" /> Scanning…</> : <>🐂 BOS CHOCH Bear</>}
+              {bosBullState === 'loading' ? <><MiniSpinner color="#22c55e" /> Scanning…</> : <>🐂 BOS CHOCH BULL</>}
+            </button>
+            <button
+              className={`scan-btn scan-btn-boschoch-bear ${bosBearState === 'loading' ? 'scanning' : ''}`}
+              onClick={() => runScan('boschoch_bear')}
+              disabled={bosBearState === 'loading'}
+            >
+              {bosBearState === 'loading' ? <><MiniSpinner color="#ef4444" /> Scanning…</> : <>🐻 BOS CHOCH BEAR</>}
             </button>
           </div>
         </div>
@@ -512,20 +524,39 @@ export default function App() {
           )}
         />
 
-        {/* ── Section 4: BOS CHOCH Bull Bear ── */}
+        {/* ── Section 4: BOS CHOCH BULL ── */}
         <StrategySection
-          title="BOS CHOCH Bull Bear"
-          subtitle="SMC Break of Structure and Change of Character analysis"
+          title="BOS CHOCH — Bullish Reversal (LONG)"
+          subtitle="SMC: Uptrend → Bearish CHOCH → Bearish BOS → Bullish BOS reversal with displacement + volume"
           icon="🐂"
-          headerClass="boschoch-header"
-          pillClass="boschoch-pill"
-          state={bosState}
-          data={bosData}
-          err={bosErr}
+          headerClass="boschoch-bull-header"
+          pillClass="boschoch-bull-pill"
+          state={bosBullState}
+          data={bosBullData}
+          err={bosBullErr}
           renderCards={(data) => (
             <div className="cards-grid">
               {data.picks.map((pick, i) => (
-                <AnalystCard key={pick.sym} pick={pick} analystName="SMC" badgeText="SMC BOS CHOCH" colorClass="boschoch-card" />
+                <AnalystCard key={pick.sym} pick={pick} analystName="SMC" badgeText="BOS CHOCH BULL" colorClass="boschoch-bull-card" />
+              ))}
+            </div>
+          )}
+        />
+
+        {/* ── Section 5: BOS CHOCH BEAR ── */}
+        <StrategySection
+          title="BOS CHOCH — Bearish Reversal (SHORT)"
+          subtitle="SMC: Downtrend → Bullish CHOCH → Bullish BOS → Bearish BOS reversal with displacement + volume"
+          icon="🐻"
+          headerClass="boschoch-bear-header"
+          pillClass="boschoch-bear-pill"
+          state={bosBearState}
+          data={bosBearData}
+          err={bosBearErr}
+          renderCards={(data) => (
+            <div className="cards-grid">
+              {data.picks.map((pick, i) => (
+                <AnalystCard key={pick.sym} pick={pick} analystName="SMC" badgeText="BOS CHOCH BEAR" colorClass="boschoch-bear-card" />
               ))}
             </div>
           )}

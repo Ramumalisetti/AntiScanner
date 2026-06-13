@@ -146,16 +146,28 @@ h1 {
   border: 1px solid rgba(157,124,252,.4);
 }
 
-/* BOS CHOCH button (orange) */
-.scan-btn-boschoch {
-  background: #f59e0b;
+/* BOS CHOCH BULL button (green) */
+.scan-btn-boschoch-bull {
+  background: #22c55e;
   color: #fff;
 }
-.scan-btn-boschoch:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(245,158,11,.35); }
-.scan-btn-boschoch.scanning {
-  background: rgba(245,158,11,.08);
-  color: #f59e0b;
-  border: 1px solid rgba(245,158,11,.4);
+.scan-btn-boschoch-bull:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(34,197,94,.4); }
+.scan-btn-boschoch-bull.scanning {
+  background: rgba(34,197,94,.08);
+  color: #22c55e;
+  border: 1px solid rgba(34,197,94,.4);
+}
+
+/* BOS CHOCH BEAR button (red) */
+.scan-btn-boschoch-bear {
+  background: #ef4444;
+  color: #fff;
+}
+.scan-btn-boschoch-bear:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(239,68,68,.4); }
+.scan-btn-boschoch-bear.scanning {
+  background: rgba(239,68,68,.08);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,.4);
 }
 
 .strategy-idle-msg {
@@ -744,7 +756,8 @@ h1 {
 .confluence-header h2 { color: var(--green); }
 .priyank-header h2 { color: #3b82f6; }
 .darvax-header h2 { color: #9d7cfc; }
-.boschoch-header h2 { color: #f59e0b; }
+.boschoch-bull-header h2 { color: #22c55e; }
+.boschoch-bear-header h2 { color: #ef4444; }
 
 .strategy-sub {
   color: var(--muted);
@@ -768,7 +781,8 @@ h1 {
 .confluence-pill { background: rgba(0,229,160,0.1); border-color: rgba(0,229,160,0.3); color: var(--green); }
 .priyank-pill { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3); color: #3b82f6; }
 .darvax-pill { background: rgba(157,124,252,0.1); border-color: rgba(157,124,252,0.3); color: #9d7cfc; }
-.boschoch-pill { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: #f59e0b; }
+.boschoch-bull-pill { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); color: #22c55e; }
+.boschoch-bear-pill { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #ef4444; }
 
 /* Confluence Header (green) */
 .confluence-header {
@@ -820,6 +834,22 @@ h1 {
 }
 .boschoch-card:hover {
   box-shadow: 0 10px 40px rgba(245,158,11,0.1);
+}
+
+.boschoch-bull-card {
+  border-top: 3px solid #22c55e;
+  background: linear-gradient(180deg, rgba(34,197,94,0.04) 0%, var(--card) 60%);
+}
+.boschoch-bull-card:hover {
+  box-shadow: 0 10px 40px rgba(34,197,94,0.12);
+}
+
+.boschoch-bear-card {
+  border-top: 3px solid #ef4444;
+  background: linear-gradient(180deg, rgba(239,68,68,0.04) 0%, var(--card) 60%);
+}
+.boschoch-bear-card:hover {
+  box-shadow: 0 10px 40px rgba(239,68,68,0.12);
 }
 
 .darvax-pill {

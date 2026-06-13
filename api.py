@@ -365,7 +365,8 @@ def analyze_darvax_worker(stock):
         pass
     return None
 
-def analyze_boschoch_worker(stock):
+def _boschoch_worker(stock, setup_filter):
+    """Generic BOS CHOCH worker. setup_filter: 'LONG' or 'SHORT'."""
     if not boschoch_analyze:
         return None
     try:
@@ -373,33 +374,39 @@ def analyze_boschoch_worker(stock):
         df = ticker.history(period="1y", interval="1d", auto_adjust=True)
         if df.empty or len(df) < 100:
             return None
-        # Use our updated bos_choch_scanner function which expects df
-        bc = boschoch_analyze(df, stock["sym"])
-        # boschoch_analyze returns a list of setups for the last candle. We'll pick the first if any.
+        # Pass the setup_filter so we only get LONG or SHORT results
+        bc = boschoch_analyze(df, stock["sym"], setup_filter=setup_filter)
         if bc and len(bc) > 0:
-            setup = bc[0] # Pick the first setup
-            # Transform it to the uniform format
+            # Pick the most recent (last in list)
+            setup = sorted(bc, key=lambda x: x.get("BOS Strength Score", 0), reverse=True)[0]
             return {
                 "sym": stock["sym"],
                 "sector": stock["sector"],
                 "trade": "BUY" if setup.get("Setup Type") == "LONG" else "SELL",
                 "price": setup.get("Entry"),
                 "score": int(setup.get("BOS Strength Score", 0) * 10),
-                "desc": f"BOS_CHOCH {setup.get('Setup Type')}",
-                "thesis": f"Risk: {setup.get('Risk %')}%, Target: {setup.get('Target 1R')}"
+                "desc": f"BOS CHOCH {setup.get('Setup Type')} — SL: {setup.get('Stop Loss')}",
+                "thesis": f"Entry: {setup.get('Entry')} | Risk: {setup.get('Risk %')}% | T1: {setup.get('Target 1R')} | T2: {setup.get('Target 2R')} | Vol: {setup.get('Volume Ratio')}x avg"
             }
-    except:
-        pass
+    except Exception as e:
+        print(f"BOS CHOCH worker error ({stock['sym']}): {e}")
     return None
+
+def analyze_boschoch_bear_worker(stock):
+    return _boschoch_worker(stock, 'SHORT')
+
+def analyze_boschoch_bull_worker(stock):
+    return _boschoch_worker(stock, 'LONG')
 
 # ─────────────────────────────────────────────
 # CACHES (per strategy)
 # ─────────────────────────────────────────────
 CACHES = {
-    "confluence": {"data": None, "ts": 0},
-    "priyank":    {"data": None, "ts": 0},
-    "darvax":     {"data": None, "ts": 0},
-    "boschoch":   {"data": None, "ts": 0},
+    "confluence":    {"data": None, "ts": 0},
+    "priyank":       {"data": None, "ts": 0},
+    "darvax":        {"data": None, "ts": 0},
+    "boschoch_bull": {"data": None, "ts": 0},
+    "boschoch_bear": {"data": None, "ts": 0},
 }
 CACHE_DURATION = 3600
 
@@ -486,20 +493,42 @@ def run_scan():
             "picks": top_picks,
         }
 
-    elif strategy == "boschoch":
+    elif strategy == "boschoch_bear":
         results = []
         with ThreadPoolExecutor(max_workers=30) as ex:
-            futures = {ex.submit(analyze_boschoch_worker, s): s for s in UNIVERSE}
+            futures = {ex.submit(analyze_boschoch_bear_worker, s): s for s in UNIVERSE}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
                     results.append(r)
         results.sort(key=lambda x: (-x["score"], x["sym"]))
-        top_picks = results[:3]
+        top_picks = results[:5]
         elapsed = round(time.time() - t0, 1)
         response_data = {
             "status": "success",
-            "strategy": "boschoch",
+            "strategy": "boschoch_bear",
+            "scan_time": scan_time,
+            "elapsed": elapsed,
+            "scanned": len(UNIVERSE),
+            "found": len(results),
+            "nifty50": nifty,
+            "picks": top_picks,
+        }
+
+    elif strategy == "boschoch_bull":
+        results = []
+        with ThreadPoolExecutor(max_workers=30) as ex:
+            futures = {ex.submit(analyze_boschoch_bull_worker, s): s for s in UNIVERSE}
+            for f in as_completed(futures):
+                r = f.result()
+                if r:
+                    results.append(r)
+        results.sort(key=lambda x: (-x["score"], x["sym"]))
+        top_picks = results[:5]
+        elapsed = round(time.time() - t0, 1)
+        response_data = {
+            "status": "success",
+            "strategy": "boschoch_bull",
             "scan_time": scan_time,
             "elapsed": elapsed,
             "scanned": len(UNIVERSE),

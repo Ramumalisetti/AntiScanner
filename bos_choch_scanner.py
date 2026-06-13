@@ -719,7 +719,11 @@ def compute_overall_summary(signal_df: pd.DataFrame, stock_summary: pd.DataFrame
 # ----------------------------------------------------------------------
 # LIVE SCANNER
 # ----------------------------------------------------------------------
-def live_scan_from_df(df: pd.DataFrame, ticker: str) -> List[dict]:
+def live_scan_from_df(df: pd.DataFrame, ticker: str, setup_filter: str = None, lookback: int = 5) -> List[dict]:
+    """
+    Returns signals from the most recent `lookback` candles.
+    setup_filter: 'LONG', 'SHORT', or None (both).
+    """
     if df is None or df.empty:
         return []
 
@@ -729,7 +733,7 @@ def live_scan_from_df(df: pd.DataFrame, ticker: str) -> List[dict]:
             "Open": "open", "High": "high", "Low": "low",
             "Close": "close", "Volume": "volume"
         })
-    df = df[["open", "high", "low", "close", "volume"]]
+    df = df[["open", "high", "low", "close", "volume"]].copy()
 
     df = add_indicators(df)
     df = detect_swings(df)
@@ -740,10 +744,15 @@ def live_scan_from_df(df: pd.DataFrame, ticker: str) -> List[dict]:
         return []
 
     last_idx = len(df) - 1
-    fresh = [s for s in signals if s.idx == last_idx]
+    # Accept signals from the last `lookback` candles, not just the very last
+    recent = [s for s in signals if s.idx >= last_idx - lookback + 1]
+
+    # Apply setup type filter if specified
+    if setup_filter:
+        recent = [s for s in recent if s.setup_type == setup_filter]
 
     rows = []
-    for sig in fresh:
+    for sig in recent:
         if sig.setup_type == "LONG":
             t1, t2, t3 = sig.entry + sig.risk, sig.entry + 2 * sig.risk, sig.entry + 3 * sig.risk
         else:
@@ -765,6 +774,7 @@ def live_scan_from_df(df: pd.DataFrame, ticker: str) -> List[dict]:
             "BOS Strength Score": round(sig.bos_strength, 2)
         })
     return rows
+
 
 def live_scan_ticker(ticker: str) -> List[dict]:
     """Checks if the LATEST candle produces a fresh Long/Short SMC signal."""
