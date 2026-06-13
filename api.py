@@ -18,9 +18,11 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from priyank_scanner import priyank_analyze
+    from smc_swing_trader_scanner import SMCScanner
+    priyank_scanner_instance = SMCScanner(lookback_days=120)
+    priyank_analyze = True
 except Exception as e:
-    print(f"Failed to import priyank_scanner: {e}")
+    print(f"Failed to import SMCScanner: {e}")
     priyank_analyze = None
 
 try:
@@ -318,14 +320,29 @@ def analyze_priyank_worker(stock):
         df = ticker.history(period="1y", interval="1d", auto_adjust=True)
         if df.empty or len(df) < 100:
             return None
+        
+        # Format df for SMCScanner
         df_lower = df[["Open", "High", "Low", "Close", "Volume"]].copy()
         df_lower.columns = ["open", "high", "low", "close", "volume"]
-        pa = priyank_analyze(df_lower, stock)
-        if pa and pa.get("trade") and pa.get("score", 0) >= 15:
-            pa["sym"] = stock["sym"]
-            pa["sector"] = stock["sector"]
-            return pa
-    except:
+        
+        # We need atr for identify_entry_stoploss_target
+        df_lower = priyank_scanner_instance.calculate_atr(df_lower)
+        
+        setup = priyank_scanner_instance.identify_entry_stoploss_target(df_lower, stock["sym"])
+        
+        if setup and setup.get("rr_ratio", 0) >= 1.5:
+            return {
+                "sym": stock["sym"],
+                "sector": stock["sector"],
+                "trade": "BUY",  # SMC scanner is primarily long setups
+                "price": setup["current_price"],
+                "score": int(setup["rr_ratio"] * 10 + setup["confluence"] * 10),
+                "desc": f"{setup['setup_type']} (Confluence: {setup['confluence']}/2)",
+                "thesis": f"Entry: {setup['entry_price']}, SL: {setup['stoploss']}, Target: {setup['target1']} (RR: 1:{setup['rr_ratio']})",
+                "vol_ratio": setup.get("volume_ratio", 1.0)
+            }
+    except Exception as e:
+        print(f"Priyank worker error: {e}")
         pass
     return None
 
