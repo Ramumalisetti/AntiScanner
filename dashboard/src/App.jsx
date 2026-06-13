@@ -356,6 +356,10 @@ export default function App() {
   const [darvData,  setDarvData]  = useState(null);
   const [darvErr,   setDarvErr]   = useState('');
 
+  const [bosState, setBosState] = useState('idle');
+  const [bosData,  setBosData]  = useState(null);
+  const [bosErr,   setBosErr]   = useState('');
+
   const [history, setHistory] = useState([]);
 
   const fetchHistory = async () => {
@@ -387,6 +391,7 @@ export default function App() {
       confluence: { setState: setConfState, setData: setConfData, setErr: setConfErr },
       priyank:    { setState: setPriyState, setData: setPriyData, setErr: setPriyErr },
       darvax:     { setState: setDarvState, setData: setDarvData, setErr: setDarvErr },
+      boschoch:   { setState: setBosState, setData: setBosData, setErr: setBosErr },
     };
     const s = setters[strategy];
     s.setState('loading');
@@ -417,7 +422,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* ── 3 Independent Scan Buttons ── */}
+          {/* ── 4 Independent Scan Buttons ── */}
           <div className="scan-buttons-row">
             <button
               className={`scan-btn scan-btn-confluence ${confState === 'loading' ? 'scanning' : ''}`}
@@ -439,6 +444,13 @@ export default function App() {
               disabled={darvState === 'loading'}
             >
               {darvState === 'loading' ? <><MiniSpinner color="#9d7cfc" /> Scanning…</> : <>📈 DarvaX Analysis</>}
+            </button>
+            <button
+              className={`scan-btn scan-btn-boschoch ${bosState === 'loading' ? 'scanning' : ''}`}
+              onClick={() => runScan('boschoch')}
+              disabled={bosState === 'loading'}
+            >
+              {bosState === 'loading' ? <><MiniSpinner color="#f59e0b" /> Scanning…</> : <>🐂 BOS CHOCH Bear</>}
             </button>
           </div>
         </div>
@@ -495,6 +507,25 @@ export default function App() {
             <div className="cards-grid">
               {data.picks.map((pick, i) => (
                 <AnalystCard key={pick.sym} pick={pick} analystName="AmitabhJha3" badgeText="AmitabhJha3 DarvaX" colorClass="darvax-card" />
+              ))}
+            </div>
+          )}
+        />
+
+        {/* ── Section 4: BOS CHOCH Bull Bear ── */}
+        <StrategySection
+          title="BOS CHOCH Bull Bear"
+          subtitle="SMC Break of Structure and Change of Character analysis"
+          icon="🐂"
+          headerClass="boschoch-header"
+          pillClass="boschoch-pill"
+          state={bosState}
+          data={bosData}
+          err={bosErr}
+          renderCards={(data) => (
+            <div className="cards-grid">
+              {data.picks.map((pick, i) => (
+                <AnalystCard key={pick.sym} pick={pick} analystName="SMC" badgeText="SMC BOS CHOCH" colorClass="boschoch-card" />
               ))}
             </div>
           )}

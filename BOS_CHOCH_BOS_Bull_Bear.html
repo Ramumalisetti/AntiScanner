@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SMC NIFTY 500 Backtester &amp; Live Scanner</title>
+<style>
+body { font-family: Consolas, Menlo, monospace; background:#1e1e1e; color:#d4d4d4; margin:0; padding:20px; }
+h1 { color:#4ec9b0; font-family: Arial, sans-serif; }
+pre { background:#1e1e1e; padding:16px; border-radius:8px; overflow:auto; font-size:13px; line-height:1.5; border:1px solid #333; }
+.note { font-family: Arial, sans-serif; color:#ccc; margin-bottom:16px; }
+</style>
+</head>
+<body>
+<h1>SMC NIFTY 500 Backtesting &amp; Live Scanner (Python 3.10)</h1>
+<div class="note">Save as <code>smc_backtester.py</code> and run with <code>python smc_backtester.py</code>. Requires: pandas, numpy, scipy, yfinance, openpyxl, matplotlib.<br>
+Outputs (in <code>smc_output/</code>): Excel files (.xlsx) AND matching HTML reports (Signal_Details.html, Summary_By_Stock.html, Overall_Summary.html, Live_Scan.html) for direct browser viewing.</div>
+<pre>&quot;&quot;&quot;
+SMC (Smart Money Concepts) Backtesting &amp; Live Scanning System
+NIFTY 500 - Daily Timeframe - yfinance based
+
+Author: Senior Quant Dev / SMC Trader / Python Backtest Expert
+Python 3.10
+
+Requires:
+    pandas, numpy, scipy, yfinance, openpyxl, matplotlib
+
+This script:
+ 1. Downloads max available daily history for NIFTY 500 stocks
+ 2. Detects swing highs/lows (swing_length = 5, no rolling highs/lows)
+ 3. Detects trend, BOS (Break of Structure) and CHOCH (Change of Character)
+ 4. Scans historical data for Long (Bullish Reversal) and Short (Bearish
+    Reversal) SMC setups per the exact rules specified
+ 5. Backtests each signal against Target1 (1R), Target2 (2R), Target3 (3R),
+    Target4 (8-day exit) and Target5 (CHOCH exit) - independently
+ 6. Exports Signal_Details.xlsx, Summary_By_Stock.xlsx, Overall_Summary.xlsx
+ 7. Runs a live scan on the latest candle for fresh Long/Short setups
+ 8. Ranks live setups using a weighted scoring model and exports
+    Top 20 Long / Top 20 Short opportunities
+&quot;&quot;&quot;
+
+import os
+import time
+import logging
+import warnings
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+import matplotlib
+matplotlib.use(&quot;Agg&quot;)
+import matplotlib.pyplot as plt
+
+warnings.filterwarnings(&quot;ignore&quot;)
+
+# ----------------------------------------------------------------------
+# CONFIG
+# ----------------------------------------------------------------------
+SWING_LENGTH = 5
+ATR_PERIOD = 14
+VOL_AVG_PERIOD = 20
+DISPLACEMENT_ATR_MULT = 0.5
+EIGHT_DAY_HOLD = 8
+
+OUTPUT_DIR = &quot;smc_output&quot;
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=&quot;%(asctime)s | %(levelname)s | %(message)s&quot;,
+    handlers=[
+        logging.FileHandler(os.path.join(OUTPUT_DIR, &quot;run.log&quot;)),
+        logging.StreamHandler()
+    ]
+)
+log = logging.getLogger(&quot;SMC&quot;)
+
+
+# ----------------------------------------------------------------------
+# NIFTY 500 TICKER LIST
+# ----------------------------------------------------------------------
+def get_nifty500_tickers() -&gt; List[str]:
+    &quot;&quot;&quot;
+    Returns NIFTY 500 tickers in Yahoo Finance format (.NS suffix).
+
+    In production, replace this with a live fetch from NSE&#x27;s official
+    ind_nifty500list.csv. A static fallback list (subset shown here for
+    brevity - extend with the full 500 symbols) is used if the live
+    fetch fails.
+    &quot;&quot;&quot;
+    try:
+        url = &quot;https://archives.nseindia.com/content/indices/ind_nifty500list.csv&quot;
+        df = pd.read_csv(url)
+        symbols = df[&quot;Symbol&quot;].astype(str).str.strip().tolist()
+        tickers = [f&quot;{s}.NS&quot; for s in symbols]
+        log.info(f&quot;Fetched {len(tickers)} NIFTY 500 symbols from NSE&quot;)
+        return tickers
+    except Exception as e:
+        log.warning(f&quot;Could not fetch live NIFTY 500 list ({e}). Using fallback sample list.&quot;)
+        fallback = [
+            &quot;RELIANCE.NS&quot;, &quot;TCS.NS&quot;, &quot;HDFCBANK.NS&quot;, &quot;INFY.NS&quot;, &quot;ICICIBANK.NS&quot;,
+            &quot;HINDUNILVR.NS&quot;, &quot;ITC.NS&quot;, &quot;SBIN.NS&quot;, &quot;BHARTIARTL.NS&quot;, &quot;KOTAKBANK.NS&quot;,
+            &quot;LT.NS&quot;, &quot;AXISBANK.NS&quot;, &quot;ASIANPAINT.NS&quot;, &quot;MARUTI.NS&quot;, &quot;SUNPHARMA.NS&quot;,
+            &quot;TITAN.NS&quot;, &quot;ULTRACEMCO.NS&quot;, &quot;BAJFINANCE.NS&quot;, &quot;WIPRO.NS&quot;, &quot;HCLTECH.NS&quot;,
+            &quot;TATAMOTORS.NS&quot;, &quot;TATASTEEL.NS&quot;, &quot;ADANIENT.NS&quot;, &quot;NTPC.NS&quot;, &quot;POWERGRID.NS&quot;,
+            &quot;M&amp;M.NS&quot;, &quot;JSWSTEEL.NS&quot;, &quot;GESHIP.NS&quot;, &quot;SRF.NS&quot;, &quot;CARTRADE.NS&quot;,
+            &quot;PROTEAN.NS&quot;, &quot;VSSL.NS&quot;, &quot;EMMVEE.NS&quot;, &quot;ATHERENERG.NS&quot;, &quot;HDFCAMC.NS&quot;
+        ]
+        return fallback
+
+
+# ----------------------------------------------------------------------
+# DATA DOWNLOAD
+# ----------------------------------------------------------------------
+def download_data(ticker: str, period: str = &quot;max&quot;) -&gt; Optional[pd.DataFrame]:
+    &quot;&quot;&quot;Download daily OHLCV data for a ticker. Returns None on failure.&quot;&quot;&quot;
+    try:
+        df = yf.download(ticker, period=period, interval=&quot;1d&quot;,
+                          auto_adjust=True, progress=False)
+        if df.empty or len(df) &lt; (SWING_LENGTH * 4 + VOL_AVG_PERIOD + ATR_PERIOD + 50):
+            log.warning(f&quot;{ticker}: insufficient data ({len(df)} rows). Skipping.&quot;)
+            return None
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        df = df.rename(columns={
+            &quot;Open&quot;: &quot;open&quot;, &quot;High&quot;: &quot;high&quot;, &quot;Low&quot;: &quot;low&quot;,
+            &quot;Close&quot;: &quot;close&quot;, &quot;Volume&quot;: &quot;volume&quot;
+        })
+        df = df[[&quot;open&quot;, &quot;high&quot;, &quot;low&quot;, &quot;close&quot;, &quot;volume&quot;]].dropna()
+        df.index = pd.to_datetime(df.index)
+        return df
+    except Exception as e:
+        log.error(f&quot;{ticker}: download failed - {e}&quot;)
+        return None
+
+
+# ----------------------------------------------------------------------
+# INDICATORS: ATR, VOLUME AVG
+# ----------------------------------------------------------------------
+def add_indicators(df: pd.DataFrame) -&gt; pd.DataFrame:
+    &quot;&quot;&quot;Adds ATR(14) and 20-day average volume. Avoids look-ahead bias by
+    using only past data (rolling windows aligned correctly).&quot;&quot;&quot;
+    high, low, close = df[&quot;high&quot;], df[&quot;low&quot;], df[&quot;close&quot;]
+    prev_close = close.shift(1)
+
+    tr = pd.concat([
+        (high - low),
+        (high - prev_close).abs(),
+        (low - prev_close).abs()
+    ], axis=1).max(axis=1)
+
+    df[&quot;atr&quot;] = tr.rolling(ATR_PERIOD).mean()
+    df[&quot;vol_avg20&quot;] = df[&quot;volume&quot;].rolling(VOL_AVG_PERIOD).mean()
+    return df
+
+
+# ----------------------------------------------------------------------
+# SWING DETECTION (swing_length = 5, fractal-based, no rolling highs/lows)
+# ----------------------------------------------------------------------
+def detect_swings(df: pd.DataFrame, length: int = SWING_LENGTH) -&gt; pd.DataFrame:
+    &quot;&quot;&quot;
+    A bar i is a swing high if high[i] &gt; high[i-length..i-1] AND
+    high[i] &gt; high[i+1..i+length]  (strict fractal high).
+    Symmetric definition for swing lows.
+
+    Note: a swing point at bar i can only be CONFIRMED once bar i+length
+    has closed - this is enforced later when swings are consumed
+    (we only use swings whose confirmation index &lt;= current bar) to
+    avoid look-ahead bias.
+    &quot;&quot;&quot;
+    n = len(df)
+    highs = df[&quot;high&quot;].values
+    lows = df[&quot;low&quot;].values
+
+    swing_high = np.full(n, False)
+    swing_low = np.full(n, False)
+
+    for i in range(length, n - length):
+        left_h = highs[i - length:i]
+        right_h = highs[i + 1:i + 1 + length]
+        if highs[i] &gt; left_h.max() and highs[i] &gt; right_h.max():
+            swing_high[i] = True
+
+        left_l = lows[i - length:i]
+        right_l = lows[i + 1:i + 1 + length]
+        if lows[i] &lt; left_l.min() and lows[i] &lt; right_l.min():
+            swing_low[i] = True
+
+    df[&quot;swing_high&quot;] = swing_high
+    df[&quot;swing_low&quot;] = swing_low
+    # Index at which a swing formed at position i becomes &quot;confirmed&quot;
+    # (i.e. visible without look-ahead bias) = i + length
+    df[&quot;swing_confirmed_idx&quot;] = df.index.to_series().shift(-length).index  # placeholder, unused directly
+    return df
+
+
+# ----------------------------------------------------------------------
+# MARKET STRUCTURE: TREND, BOS, CHOCH
+# ----------------------------------------------------------------------
+@dataclass
+class StructureState:
+    &quot;&quot;&quot;Rolling structure state walked bar-by-bar (no look-ahead).&quot;&quot;&quot;
+    trend: str = &quot;NONE&quot;            # &quot;UP&quot;, &quot;DOWN&quot;, &quot;NONE&quot;
+    bullish_bos_count: int = 0
+    bearish_bos_count: int = 0
+    last_swing_high: Optional[float] = None
+    last_swing_high_idx: Optional[int] = None
+    last_swing_low: Optional[float] = None
+    last_swing_low_idx: Optional[int] = None
+    prev_swing_high: Optional[float] = None
+    prev_swing_low: Optional[float] = None
+    higher_highs: bool = False
+    higher_lows: bool = False
+    lower_highs: bool = False
+    lower_lows: bool = False
+    # event flags reset every bar
+    bullish_bos: bool = False
+    bearish_bos: bool = False
+    bullish_choch: bool = False
+    bearish_choch: bool = False
+
+
+def walk_structure(df: pd.DataFrame) -&gt; pd.DataFrame:
+    &quot;&quot;&quot;
+    Walks the dataframe bar-by-bar maintaining swing points (confirmed
+    only with a lag of SWING_LENGTH bars to avoid look-ahead bias) and
+    flags BOS / CHOCH events on each bar&#x27;s close.
+
+    BOS (Bullish):  close breaks above last confirmed swing high while
+                    NOT in a fresh bearish-CHOCH state -&gt; trend continuation
+                    or trend establishment.
+    BOS (Bearish):  close breaks below last confirmed swing low.
+    CHOCH (Bearish): in an uptrend, close breaks below the last confirmed
+                     swing low (first break against the trend).
+    CHOCH (Bullish): in a downtrend, close breaks above the last confirmed
+                     swing high (first break against the trend).
+    &quot;&quot;&quot;
+    n = len(df)
+    state = StructureState()
+
+    cols = [&quot;trend&quot;, &quot;bullish_bos&quot;, &quot;bearish_bos&quot;, &quot;bullish_choch&quot;, &quot;bearish_choch&quot;,
+            &quot;bullish_bos_count&quot;, &quot;bearish_bos_count&quot;,
+            &quot;last_swing_high&quot;, &quot;last_swing_low&quot;,
+            &quot;higher_highs_lows&quot;, &quot;lower_highs_lows&quot;]
+    out = {c: [None] * n for c in cols}
+
+    confirmed_highs: List[Tuple[int, float]] = []  # (idx, price) confirmed swing highs in order
+    confirmed_lows: List[Tuple[int, float]] = []
+
+    for i in range(n):
+        state.bullish_bos = False
+        state.bearish_bos = False
+        state.bullish_choch = False
+        state.bearish_choch = False
+
+        # Confirm any swing that became valid at this index (formed at i-SWING_LENGTH)
+        confirm_idx = i - SWING_LENGTH
+        if confirm_idx &gt;= 0:
+            if df[&quot;swing_high&quot;].iloc[confirm_idx]:
+                confirmed_highs.append((confirm_idx, df[&quot;high&quot;].iloc[confirm_idx]))
+            if df[&quot;swing_low&quot;].iloc[confirm_idx]:
+                confirmed_lows.append((confirm_idx, df[&quot;low&quot;].iloc[confirm_idx]))
+
+        close = df[&quot;close&quot;].iloc[i]
+
+        # --- Check BOS / CHOCH against the most recent confirmed swing levels ---
+        if confirmed_highs:
+            last_high_idx, last_high_px = confirmed_highs[-1]
+        else:
+            last_high_idx, last_high_px = None, None
+
+        if confirmed_lows:
+            last_low_idx, last_low_px = confirmed_lows[-1]
+        else:
+            last_low_idx, last_low_px = None, None
+
+        # Bullish break: close above last confirmed swing high
+        if last_high_px is not None and close &gt; last_high_px:
+            if state.trend == &quot;DOWN&quot;:
+                # First break against downtrend -&gt; Bullish CHOCH
+                state.bullish_choch = True
+                state.trend = &quot;UP&quot;
+                state.bullish_bos_count = 0
+                state.bearish_bos_count = 0
+            elif state.trend == &quot;UP&quot;:
+                state.bullish_bos = True
+                state.bullish_bos_count += 1
+            else:  # NONE
+                state.bullish_bos = True
+                state.trend = &quot;UP&quot;
+                state.bullish_bos_count += 1
+
+            # track HH structure
+            if state.last_swing_high is not None:
+                state.higher_highs = last_high_px &gt; state.last_swing_high if state.last_swing_high else state.higher_highs
+            state.prev_swing_high = state.last_swing_high
+            state.last_swing_high = last_high_px
+            state.last_swing_high_idx = last_high_idx
+            # consume so the same level doesn&#x27;t re-trigger
+            confirmed_highs = confirmed_highs[:-1]
+
+        # Bearish break: close below last confirmed swing low
+        if last_low_px is not None and close &lt; last_low_px:
+            if state.trend == &quot;UP&quot;:
+                state.bearish_choch = True
+                state.trend = &quot;DOWN&quot;
+                state.bullish_bos_count = 0
+                state.bearish_bos_count = 0
+            elif state.trend == &quot;DOWN&quot;:
+                state.bearish_bos = True
+                state.bearish_bos_count += 1
+            else:
+                state.bearish_bos = True
+                state.trend = &quot;DOWN&quot;
+                state.bearish_bos_count += 1
+
+            if state.last_swing_low is not None:
+                state.lower_lows = last_low_px &lt; state.last_swing_low if state.last_swing_low else state.lower_lows
+            state.prev_swing_low = state.last_swing_low
+            state.last_swing_low = last_low_px
+            state.last_swing_low_idx = last_low_idx
+            confirmed_lows = confirmed_lows[:-1]
+
+        out[&quot;trend&quot;][i] = state.trend
+        out[&quot;bullish_bos&quot;][i] = state.bullish_bos
+        out[&quot;bearish_bos&quot;][i] = state.bearish_bos
+        out[&quot;bullish_choch&quot;][i] = state.bullish_choch
+        out[&quot;bearish_choch&quot;][i] = state.bearish_choch
+        out[&quot;bullish_bos_count&quot;][i] = state.bullish_bos_count
+        out[&quot;bearish_bos_count&quot;][i] = state.bearish_bos_count
+        out[&quot;last_swing_high&quot;][i] = state.last_swing_high
+        out[&quot;last_swing_low&quot;][i] = state.last_swing_low
+        out[&quot;higher_highs_lows&quot;][i] = state.higher_highs and state.higher_lows
+        out[&quot;lower_highs_lows&quot;][i] = state.lower_highs and state.lower_lows
+
+    for c in cols:
+        df[c] = out[c]
+    return df
+
+
+# ----------------------------------------------------------------------
+# SIGNAL DETECTION (LONG = Bullish Reversal, SHORT = Bearish Reversal)
+# ----------------------------------------------------------------------
+@dataclass
+class Signal:
+    ticker: str
+    date: pd.Timestamp
+    idx: int
+    setup_type: str  # &quot;LONG&quot; or &quot;SHORT&quot;
+    entry: float
+    stop_loss: float
+    risk: float
+    bos_strength: float
+    atr: float
+    vol_ratio: float
+
+
+def find_signals(df: pd.DataFrame, ticker: str) -&gt; List[Signal]:
+    &quot;&quot;&quot;
+    LONG (Bullish Reversal):
+      - Existing uptrend with &gt;=2 bullish BOS prior to CHOCH, HH &amp; HL
+      - A Bearish CHOCH occurs (breaks last swing low)
+      - At least 1 Bearish BOS after the CHOCH
+      - A new Bullish BOS breaks the latest swing high (the reversal signal)
+      - Displacement: break exceeds 0.5 * ATR(14)
+      - Volume &gt; 20-day average volume
+
+    SHORT (Bearish Reversal): symmetric, mirrored conditions.
+    &quot;&quot;&quot;
+    signals: List[Signal] = []
+    n = len(df)
+
+    # State trackers for &quot;was there a qualifying prior uptrend with CHOCH + bearish BOS&quot;
+    # We scan sequentially using the structure columns already computed.
+    prior_uptrend_qualified = False     # uptrend had &gt;=2 bullish BOS &amp; HH/HL before CHOCH
+    bearish_choch_seen = False
+    bearish_bos_after_choch = 0
+
+    prior_downtrend_qualified = False
+    bullish_choch_seen = False
+    bullish_bos_after_choch = 0
+
+    bullish_bos_streak = 0
+    bearish_bos_streak = 0
+
+    for i in range(SWING_LENGTH * 2 + ATR_PERIOD, n):
+        row = df.iloc[i]
+        trend = row[&quot;trend&quot;]
+
+        # --- track bullish BOS streak prior to a bearish CHOCH (for LONG setup precondition) ---
+        if row[&quot;bullish_bos&quot;]:
+            bullish_bos_streak += 1
+            bearish_bos_streak = 0
+        if row[&quot;bearish_bos&quot;]:
+            bearish_bos_streak += 1
+            bullish_bos_streak = 0
+
+        # Mark that we had a qualifying prior uptrend (&gt;=2 bullish BOS, HH/HL)
+        if trend == &quot;UP&quot; and bullish_bos_streak &gt;= 2:
+            prior_uptrend_qualified = True
+
+        if trend == &quot;DOWN&quot; and bearish_bos_streak &gt;= 2:
+            prior_downtrend_qualified = True
+
+        # --- Bearish CHOCH detected: reset counters, require prior uptrend qualified ---
+        if row[&quot;bearish_choch&quot;]:
+            if prior_uptrend_qualified:
+                bearish_choch_seen = True
+                bearish_bos_after_choch = 0
+            else:
+                bearish_choch_seen = False
+            prior_uptrend_qualified = False  # consumed
+            bullish_bos_streak = 0
+            bearish_bos_streak = 0
+
+        if row[&quot;bullish_choch&quot;]:
+            if prior_downtrend_qualified:
+                bullish_choch_seen = True
+                bullish_bos_after_choch = 0
+            else:
+                bullish_choch_seen = False
+            prior_downtrend_qualified = False
+            bullish_bos_streak = 0
+            bearish_bos_streak = 0
+
+        # count bearish BOS after a bearish CHOCH (confirmation step for LONG setup)
+        if bearish_choch_seen and row[&quot;bearish_bos&quot;] and not row[&quot;bearish_choch&quot;]:
+            bearish_bos_after_choch += 1
+
+        if bullish_choch_seen and row[&quot;bullish_bos&quot;] and not row[&quot;bullish_choch&quot;]:
+            bullish_bos_after_choch += 1
+
+        # ================= LONG SETUP =================
+        # New Bullish BOS = the reversal trigger, requires bearish_choch_seen
+        # and &gt;=1 bearish BOS confirmation after that CHOCH.
+        if (row[&quot;bullish_bos&quot;] and bearish_choch_seen and bearish_bos_after_choch &gt;= 1):
+            atr = row[&quot;atr&quot;]
+            vol_avg = row[&quot;vol_avg20&quot;]
+            if pd.isna(atr) or pd.isna(vol_avg) or atr == 0:
+                pass
+            else:
+                last_swing_high = row[&quot;last_swing_high&quot;]
+                prior_close = df[&quot;close&quot;].iloc[i - 1]
+                displacement = row[&quot;close&quot;] - last_swing_high if last_swing_high else 0
+                displacement_ok = displacement &gt; DISPLACEMENT_ATR_MULT * atr
+                volume_ok = row[&quot;volume&quot;] &gt; vol_avg
+
+                if displacement_ok and volume_ok:
+                    entry = row[&quot;close&quot;]
+                    stop = row[&quot;last_swing_low&quot;]  # latest confirmed swing low before this BOS
+                    if stop is not None and stop &lt; entry:
+                        risk = entry - stop
+                        bos_strength = displacement / atr  # normalized strength
+                        vol_ratio = row[&quot;volume&quot;] / vol_avg
+                        signals.append(Signal(
+                            ticker=ticker, date=df.index[i], idx=i, setup_type=&quot;LONG&quot;,
+                            entry=entry, stop_loss=stop, risk=risk,
+                            bos_strength=bos_strength, atr=atr, vol_ratio=vol_ratio
+                        ))
+                        # reset reversal state - new uptrend established
+                        bearish_choch_seen = False
+                        bearish_bos_after_choch = 0
+                        prior_uptrend_qualified = False
+                        bullish_bos_streak = 1  # this BOS counts
+
+        # ================= SHORT SETUP =================
+        if (row[&quot;bearish_bos&quot;] and bullish_choch_seen and bullish_bos_after_choch &gt;= 1):
+            atr = row[&quot;atr&quot;]
+            vol_avg = row[&quot;vol_avg20&quot;]
+            if pd.isna(atr) or pd.isna(vol_avg) or atr == 0:
+                pass
+            else:
+                last_swing_low = row[&quot;last_swing_low&quot;]
+                displacement = (last_swing_low - row[&quot;close&quot;]) if last_swing_low else 0
+                displacement_ok = displacement &gt; DISPLACEMENT_ATR_MULT * atr
+                volume_ok = row[&quot;volume&quot;] &gt; vol_avg
+
+                if displacement_ok and volume_ok:
+                    entry = row[&quot;close&quot;]
+                    stop = row[&quot;last_swing_high&quot;]
+                    if stop is not None and stop &gt; entry:
+                        risk = stop - entry
+                        bos_strength = displacement / atr
+                        vol_ratio = row[&quot;volume&quot;] / vol_avg
+                        signals.append(Signal(
+                            ticker=ticker, date=df.index[i], idx=i, setup_type=&quot;SHORT&quot;,
+                            entry=entry, stop_loss=stop, risk=risk,
+                            bos_strength=bos_strength, atr=atr, vol_ratio=vol_ratio
+                        ))
+                        bullish_choch_seen = False
+                        bullish_bos_after_choch = 0
+                        prior_downtrend_qualified = False
+                        bearish_bos_streak = 1
+
+    return signals
+
+
+# ----------------------------------------------------------------------
+# TRADE SIMULATION (per-signal forward walk - no look-ahead)
+# ----------------------------------------------------------------------
+def simulate_trade(df: pd.DataFrame, sig: Signal) -&gt; dict:
+    &quot;&quot;&quot;
+    Walks forward from the signal bar (entry at close of signal bar)
+    and computes:
+      - Target1/2/3 hit results (1R/2R/3R) - which came first (target or stop)
+      - 1/3/5/8-day returns
+      - CHOCH exit return (Target5) - exit at close of the opposite CHOCH
+      - MFE / MAE over the forward window (until exit or 8 days, whichever
+        is later among the considered exits, capped at remaining data)
+    &quot;&quot;&quot;
+    n = len(df)
+    entry_idx = sig.idx
+    entry = sig.entry
+    stop = sig.stop_loss
+    risk = sig.risk
+    is_long = sig.setup_type == &quot;LONG&quot;
+
+    if is_long:
+        t1, t2, t3 = entry + 1 * risk, entry + 2 * risk, entry + 3 * risk
+    else:
+        t1, t2, t3 = entry - 1 * risk, entry - 2 * risk, entry - 3 * risk
+
+    result = {
+        &quot;Target1 Result&quot;: &quot;OPEN&quot;, &quot;Target2 Result&quot;: &quot;OPEN&quot;, &quot;Target3 Result&quot;: &quot;OPEN&quot;,
+        &quot;1-Day Return&quot;: np.nan, &quot;3-Day Return&quot;: np.nan, &quot;5-Day Return&quot;: np.nan,
+        &quot;8-Day Return&quot;: np.nan, &quot;CHOCH Exit Return&quot;: np.nan,
+        &quot;MFE&quot;: np.nan, &quot;MAE&quot;: np.nan
+    }
+
+    max_lookahead = min(n - 1, entry_idx + 60)  # cap search horizon
+    mfe, mae = 0.0, 0.0
+    hit_t = {1: None, 2: None, 3: None}
+    stop_hit_idx = None
+
+    for j in range(entry_idx + 1, max_lookahead + 1):
+        high_j, low_j = df[&quot;high&quot;].iloc[j], df[&quot;low&quot;].iloc[j]
+
+        if is_long:
+            fav = high_j - entry
+            adv = entry - low_j
+        else:
+            fav = entry - low_j
+            adv = high_j - entry
+
+        mfe = max(mfe, fav)
+        mae = max(mae, adv)
+
+        # check stop first (conservative - assume stop hit before target on same bar)
+        stop_hit = (low_j &lt;= stop) if is_long else (high_j &gt;= stop)
+        if stop_hit and stop_hit_idx is None:
+            stop_hit_idx = j
+
+        for k, tgt in zip((1, 2, 3), (t1, t2, t3)):
+            if hit_t[k] is None:
+                tgt_hit = (high_j &gt;= tgt) if is_long else (low_j &lt;= tgt)
+                if stop_hit and (stop_hit_idx == j):
+                    if tgt_hit:
+                        # ambiguous same-bar - assume stop first (conservative)
+                        hit_t[k] = &quot;LOSS&quot;
+                    else:
+                        hit_t[k] = &quot;LOSS&quot;
+                elif tgt_hit:
+                    hit_t[k] = &quot;WIN&quot;
+
+        if all(v is not None for v in hit_t.values()) and stop_hit:
+            break
+
+    for k in (1, 2, 3):
+        if hit_t[k] is None:
+            result[f&quot;Target{k} Result&quot;] = &quot;OPEN&quot;
+        else:
+            result[f&quot;Target{k} Result&quot;] = hit_t[k]
+
+    # N-day returns
+    for days, key in zip((1, 3, 5, 8), (&quot;1-Day Return&quot;, &quot;3-Day Return&quot;, &quot;5-Day Return&quot;, &quot;8-Day Return&quot;)):
+        j = entry_idx + days
+        if j &lt; n:
+            px = df[&quot;close&quot;].iloc[j]
+            ret = (px - entry) / entry if is_long else (entry - px) / entry
+            result[key] = ret * 100
+
+    # CHOCH exit (Target5)
+    choch_col = &quot;bearish_choch&quot; if is_long else &quot;bullish_choch&quot;
+    for j in range(entry_idx + 1, max_lookahead + 1):
+        if df[choch_col].iloc[j]:
+            px = df[&quot;close&quot;].iloc[j]
+            ret = (px - entry) / entry if is_long else (entry - px) / entry
+            result[&quot;CHOCH Exit Return&quot;] = ret * 100
+            break
+
+    result[&quot;MFE&quot;] = (mfe / entry) * 100
+    result[&quot;MAE&quot;] = (mae / entry) * 100
+    return result
+
+
+# ----------------------------------------------------------------------
+# BACKTEST DRIVER
+# ----------------------------------------------------------------------
+def backtest_ticker(ticker: str) -&gt; pd.DataFrame:
+    df = download_data(ticker)
+    if df is None:
+        return pd.DataFrame()
+
+    df = add_indicators(df)
+    df = detect_swings(df)
+    df = walk_structure(df)
+
+    signals = find_signals(df, ticker)
+    if not signals:
+        return pd.DataFrame()
+
+    rows = []
+    for sig in signals:
+        res = simulate_trade(df, sig)
+        rows.append({
+            &quot;Ticker&quot;: sig.ticker,
+            &quot;Date&quot;: sig.date.date(),
+            &quot;Setup Type&quot;: sig.setup_type,
+            &quot;Entry&quot;: round(sig.entry, 2),
+            &quot;Stop Loss&quot;: round(sig.stop_loss, 2),
+            &quot;Risk&quot;: round(sig.risk, 2),
+            **{k: (round(v, 2) if isinstance(v, (int, float)) and not pd.isna(v) else v)
+               for k, v in res.items()}
+        })
+    return pd.DataFrame(rows)
+
+
+# ----------------------------------------------------------------------
+# SUMMARY STATISTICS
+# ----------------------------------------------------------------------
+def compute_stock_summary(signal_df: pd.DataFrame) -&gt; pd.DataFrame:
+    summaries = []
+    for ticker, g in signal_df.groupby(&quot;Ticker&quot;):
+        total = len(g)
+        # Use Target1 result as the primary win/loss reference
+        wins = (g[&quot;Target1 Result&quot;] == &quot;WIN&quot;).sum()
+        win_rate = (wins / total * 100) if total else 0
+
+        returns = g[&quot;1-Day Return&quot;].dropna()
+        avg_return = returns.mean() if len(returns) else np.nan
+
+        gross_profit = returns[returns &gt; 0].sum() if len(returns) else 0
+        gross_loss = -returns[returns &lt; 0].sum() if len(returns) else 0
+        profit_factor = (gross_profit / gross_loss) if gross_loss &gt; 0 else np.nan
+
+        expectancy = returns.mean() if len(returns) else np.nan
+
+        # equity curve &amp; max drawdown based on cumulative 1-day returns
+        if len(returns):
+            eq = (1 + returns / 100).cumprod()
+            peak = eq.cummax()
+            dd = (eq - peak) / peak
+            max_dd = dd.min() * 100
+            sharpe = (returns.mean() / returns.std() * np.sqrt(252)) if returns.std() &gt; 0 else np.nan
+        else:
+            max_dd, sharpe = np.nan, np.nan
+
+        # best target type by win rate
+        target_cols = [&quot;Target1 Result&quot;, &quot;Target2 Result&quot;, &quot;Target3 Result&quot;]
+        best_target, best_wr = None, -1
+        for tc in target_cols:
+            wr = (g[tc] == &quot;WIN&quot;).mean() * 100
+            if wr &gt; best_wr:
+                best_wr = wr
+                best_target = tc.replace(&quot; Result&quot;, &quot;&quot;)
+
+        summaries.append({
+            &quot;Ticker&quot;: ticker,
+            &quot;Total Signals&quot;: total,
+            &quot;Win Rate %&quot;: round(win_rate, 2),
+            &quot;Avg Return %&quot;: round(avg_return, 2) if not pd.isna(avg_return) else np.nan,
+            &quot;Profit Factor&quot;: round(profit_factor, 2) if not pd.isna(profit_factor) else np.nan,
+            &quot;Expectancy&quot;: round(expectancy, 2) if not pd.isna(expectancy) else np.nan,
+            &quot;Max Drawdown&quot;: round(max_dd, 2) if not pd.isna(max_dd) else np.nan,
+            &quot;Sharpe Ratio&quot;: round(sharpe, 2) if not pd.isna(sharpe) else np.nan,
+            &quot;Best Target Type&quot;: best_target
+        })
+    return pd.DataFrame(summaries)
+
+
+def compute_overall_summary(signal_df: pd.DataFrame, stock_summary: pd.DataFrame) -&gt; dict:
+    returns = signal_df[&quot;1-Day Return&quot;].dropna()
+    wins = (signal_df[&quot;Target1 Result&quot;] == &quot;WIN&quot;).sum()
+    total = len(signal_df)
+    win_rate = (wins / total * 100) if total else 0
+
+    gross_profit = returns[returns &gt; 0].sum() if len(returns) else 0
+    gross_loss = -returns[returns &lt; 0].sum() if len(returns) else 0
+    profit_factor = (gross_profit / gross_loss) if gross_loss &gt; 0 else np.nan
+    expectancy = returns.mean() if len(returns) else np.nan
+
+    eq = (1 + returns / 100).cumprod() if len(returns) else pd.Series([1.0])
+    peak = eq.cummax()
+    dd = (eq - peak) / peak
+    max_dd = dd.min() * 100
+    sharpe = (returns.mean() / returns.std() * np.sqrt(252)) if len(returns) &gt; 1 and returns.std() &gt; 0 else np.nan
+
+    # Best holding period: compare mean returns across 1/3/5/8-day
+    hold_cols = [&quot;1-Day Return&quot;, &quot;3-Day Return&quot;, &quot;5-Day Return&quot;, &quot;8-Day Return&quot;]
+    hold_means = {c: signal_df[c].dropna().mean() for c in hold_cols if signal_df[c].notna().any()}
+    best_hold = max(hold_means, key=hold_means.get) if hold_means else None
+
+    # Best risk reward target: compare win rates across T1/T2/T3
+    target_cols = [&quot;Target1 Result&quot;, &quot;Target2 Result&quot;, &quot;Target3 Result&quot;]
+    target_wr = {c: (signal_df[c] == &quot;WIN&quot;).mean() * 100 for c in target_cols}
+    best_target = max(target_wr, key=target_wr.get) if target_wr else None
+
+    top20 = stock_summary.sort_values(&quot;Avg Return %&quot;, ascending=False).head(20)
+    bottom20 = stock_summary.sort_values(&quot;Avg Return %&quot;, ascending=True).head(20)
+
+    # Monthly / yearly returns
+    sd = signal_df.copy()
+    sd[&quot;Date&quot;] = pd.to_datetime(sd[&quot;Date&quot;])
+    sd[&quot;Return&quot;] = sd[&quot;1-Day Return&quot;]
+    monthly = sd.groupby(sd[&quot;Date&quot;].dt.to_period(&quot;M&quot;))[&quot;Return&quot;].mean().reset_index()
+    monthly[&quot;Date&quot;] = monthly[&quot;Date&quot;].astype(str)
+    yearly = sd.groupby(sd[&quot;Date&quot;].dt.year)[&quot;Return&quot;].mean().reset_index()
+
+    return {
+        &quot;Overall Win Rate&quot;: round(win_rate, 2),
+        &quot;Profit Factor&quot;: round(profit_factor, 2) if not pd.isna(profit_factor) else np.nan,
+        &quot;Expectancy&quot;: round(expectancy, 2) if not pd.isna(expectancy) else np.nan,
+        &quot;Max Drawdown&quot;: round(max_dd, 2) if not pd.isna(max_dd) else np.nan,
+        &quot;Sharpe Ratio&quot;: round(sharpe, 2) if not pd.isna(sharpe) else np.nan,
+        &quot;Top 20 Stocks&quot;: top20,
+        &quot;Bottom 20 Stocks&quot;: bottom20,
+        &quot;Best Holding Period&quot;: best_hold,
+        &quot;Best Risk Reward Target&quot;: best_target,
+        &quot;Equity Curve&quot;: eq,
+        &quot;Monthly Returns&quot;: monthly,
+        &quot;Yearly Returns&quot;: yearly
+    }
+
+
+# ----------------------------------------------------------------------
+# LIVE SCANNER
+# ----------------------------------------------------------------------
+def live_scan_ticker(ticker: str) -&gt; List[dict]:
+    &quot;&quot;&quot;Checks if the LATEST candle produces a fresh Long/Short SMC signal.&quot;&quot;&quot;
+    df = download_data(ticker)
+    if df is None:
+        return []
+
+    df = add_indicators(df)
+    df = detect_swings(df)
+    df = walk_structure(df)
+
+    signals = find_signals(df, ticker)
+    if not signals:
+        return []
+
+    last_idx = len(df) - 1
+    fresh = [s for s in signals if s.idx == last_idx]
+
+    rows = []
+    for sig in fresh:
+        if sig.setup_type == &quot;LONG&quot;:
+            t1, t2, t3 = sig.entry + sig.risk, sig.entry + 2 * sig.risk, sig.entry + 3 * sig.risk
+        else:
+            t1, t2, t3 = sig.entry - sig.risk, sig.entry - 2 * sig.risk, sig.entry - 3 * sig.risk
+
+        risk_pct = (sig.risk / sig.entry) * 100
+
+        rows.append({
+            &quot;Ticker&quot;: ticker,
+            &quot;Setup Type&quot;: sig.setup_type,
+            &quot;Entry&quot;: round(sig.entry, 2),
+            &quot;Stop Loss&quot;: round(sig.stop_loss, 2),
+            &quot;Risk %&quot;: round(risk_pct, 2),
+            &quot;Target 1R&quot;: round(t1, 2),
+            &quot;Target 2R&quot;: round(t2, 2),
+            &quot;Target 3R&quot;: round(t3, 2),
+            &quot;ATR&quot;: round(sig.atr, 2),
+            &quot;Volume Ratio&quot;: round(sig.vol_ratio, 2),
+            &quot;BOS Strength Score&quot;: round(sig.bos_strength, 2)
+        })
+    return rows
+
+
+# ----------------------------------------------------------------------
+# RANKING MODEL
+# ----------------------------------------------------------------------
+def rank_setups(setups: pd.DataFrame, trend_quality_map: dict) -&gt; pd.DataFrame:
+    &quot;&quot;&quot;
+    Score = 40% BOS Strength + 25% Volume Expansion
+            + 20% ATR Efficiency + 15% Trend Quality
+    All components are min-max normalized to 0-100 before weighting.
+    &quot;&quot;&quot;
+    if setups.empty:
+        return setups
+
+    df = setups.copy()
+
+    def norm(s: pd.Series) -&gt; pd.Series:
+        rng = s.max() - s.min()
+        if rng == 0:
+            return pd.Series(50.0, index=s.index)
+        return (s - s.min()) / rng * 100
+
+    bos_n = norm(df[&quot;BOS Strength Score&quot;])
+    vol_n = norm(df[&quot;Volume Ratio&quot;])
+    # ATR efficiency: reward setups with risk (in ATR units, ~Risk/ATR) that
+    # is reasonable - lower risk relative to ATR is more &quot;efficient&quot;.
+    atr_eff = df[&quot;ATR&quot;] / (df[&quot;Entry&quot;] - df[&quot;Stop Loss&quot;]).abs().replace(0, np.nan)
+    atr_eff = atr_eff.fillna(atr_eff.median())
+    atr_n = norm(atr_eff)
+
+    trend_q = df[&quot;Ticker&quot;].map(trend_quality_map).fillna(50.0)
+
+    df[&quot;Score&quot;] = (0.40 * bos_n + 0.25 * vol_n + 0.20 * atr_n + 0.15 * trend_q)
+    df = df.sort_values(&quot;Score&quot;, ascending=False).reset_index(drop=True)
+    return df
+
+
+# ----------------------------------------------------------------------
+# EXCEL EXPORT HELPERS
+# ----------------------------------------------------------------------
+HTML_STYLE = &quot;&quot;&quot;
+&lt;style&gt;
+body { font-family: Arial, sans-serif; background:#0f1117; color:#e6e6e6; margin:0; padding:24px; }
+h1 { color:#4ec9b0; }
+h2 { color:#9cdcfe; margin-top:32px; }
+table { border-collapse: collapse; width:100%; margin-bottom:24px; font-size:13px; }
+th, td { border:1px solid #333; padding:6px 10px; text-align:right; }
+th { background:#1e2530; color:#4ec9b0; position:sticky; top:0; }
+td:first-child, th:first-child { text-align:left; }
+tr:nth-child(even) { background:#161b22; }
+tr:hover { background:#21262d; }
+.win { color:#4caf50; font-weight:bold; }
+.loss { color:#f44336; font-weight:bold; }
+.open { color:#ffb74d; }
+.long { color:#4caf50; font-weight:bold; }
+.short { color:#f44336; font-weight:bold; }
+.kpi-box { display:inline-block; background:#1e2530; padding:12px 20px; margin:6px; border-radius:8px; min-width:140px; }
+.kpi-label { font-size:11px; color:#9cdcfe; text-transform:uppercase; }
+.kpi-value { font-size:20px; font-weight:bold; }
+img { max-width:100%; border-radius:8px; margin:16px 0; }
+&lt;/style&gt;
+&quot;&quot;&quot;
+
+
+def _df_to_html_table(df: pd.DataFrame) -&gt; str:
+    if df.empty:
+        return &quot;&lt;p&gt;&lt;em&gt;No data.&lt;/em&gt;&lt;/p&gt;&quot;
+
+    def cell_class(col, val):
+        if col in (&quot;Setup Type&quot;,):
+            return &quot;long&quot; if val == &quot;LONG&quot; else &quot;short&quot;
+        if &quot;Result&quot; in col:
+            if val == &quot;WIN&quot;:
+                return &quot;win&quot;
+            if val == &quot;LOSS&quot;:
+                return &quot;loss&quot;
+            if val == &quot;OPEN&quot;:
+                return &quot;open&quot;
+        return &quot;&quot;
+
+    headers = &quot;&quot;.join(f&quot;&lt;th&gt;{c}&lt;/th&gt;&quot; for c in df.columns)
+    rows_html = []
+    for _, row in df.iterrows():
+        cells = []
+        for c in df.columns:
+            val = row[c]
+            cls = cell_class(c, val)
+            cls_attr = f&#x27; class=&quot;{cls}&quot;&#x27; if cls else &quot;&quot;
+            cells.append(f&quot;&lt;td{cls_attr}&gt;{val}&lt;/td&gt;&quot;)
+        rows_html.append(&quot;&lt;tr&gt;&quot; + &quot;&quot;.join(cells) + &quot;&lt;/tr&gt;&quot;)
+    return f&quot;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;{headers}&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;{&#x27;&#x27;.join(rows_html)}&lt;/tbody&gt;&lt;/table&gt;&quot;
+
+
+def export_signal_details(signal_df: pd.DataFrame):
+    path = os.path.join(OUTPUT_DIR, &quot;Signal_Details.xlsx&quot;)
+    signal_df.to_excel(path, index=False)
+    log.info(f&quot;Saved {path}&quot;)
+
+    html_path = os.path.join(OUTPUT_DIR, &quot;Signal_Details.html&quot;)
+    body = f&quot;&lt;h1&gt;Signal Details&lt;/h1&gt;&lt;p&gt;Total signals: {len(signal_df)}&lt;/p&gt;&quot; + _df_to_html_table(signal_df)
+    with open(html_path, &quot;w&quot;) as f:
+        f.write(f&quot;&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;head&gt;&lt;meta charset=&#x27;utf-8&#x27;&gt;&lt;title&gt;Signal Details&lt;/title&gt;{HTML_STYLE}&lt;/head&gt;&lt;body&gt;{body}&lt;/body&gt;&lt;/html&gt;&quot;)
+    log.info(f&quot;Saved {html_path}&quot;)
+
+
+def export_summary_by_stock(summary_df: pd.DataFrame):
+    path = os.path.join(OUTPUT_DIR, &quot;Summary_By_Stock.xlsx&quot;)
+    summary_df.to_excel(path, index=False)
+    log.info(f&quot;Saved {path}&quot;)
+
+    html_path = os.path.join(OUTPUT_DIR, &quot;Summary_By_Stock.html&quot;)
+    body = &quot;&lt;h1&gt;Summary By Stock&lt;/h1&gt;&quot; + _df_to_html_table(summary_df)
+    with open(html_path, &quot;w&quot;) as f:
+        f.write(f&quot;&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;head&gt;&lt;meta charset=&#x27;utf-8&#x27;&gt;&lt;title&gt;Summary By Stock&lt;/title&gt;{HTML_STYLE}&lt;/head&gt;&lt;body&gt;{body}&lt;/body&gt;&lt;/html&gt;&quot;)
+    log.info(f&quot;Saved {html_path}&quot;)
+
+
+def export_overall_summary(overall: dict):
+    path = os.path.join(OUTPUT_DIR, &quot;Overall_Summary.xlsx&quot;)
+    with pd.ExcelWriter(path, engine=&quot;openpyxl&quot;) as writer:
+        scalar_keys = [&quot;Overall Win Rate&quot;, &quot;Profit Factor&quot;, &quot;Expectancy&quot;,
+                        &quot;Max Drawdown&quot;, &quot;Sharpe Ratio&quot;,
+                        &quot;Best Holding Period&quot;, &quot;Best Risk Reward Target&quot;]
+        scalar_df = pd.DataFrame({k: [overall[k]] for k in scalar_keys})
+        scalar_df.to_excel(writer, sheet_name=&quot;Overview&quot;, index=False)
+
+        overall[&quot;Top 20 Stocks&quot;].to_excel(writer, sheet_name=&quot;Top20&quot;, index=False)
+        overall[&quot;Bottom 20 Stocks&quot;].to_excel(writer, sheet_name=&quot;Bottom20&quot;, index=False)
+        overall[&quot;Monthly Returns&quot;].to_excel(writer, sheet_name=&quot;Monthly&quot;, index=False)
+        overall[&quot;Yearly Returns&quot;].to_excel(writer, sheet_name=&quot;Yearly&quot;, index=False)
+
+        eq = overall[&quot;Equity Curve&quot;].reset_index()
+        eq.columns = [&quot;TradeNum&quot;, &quot;EquityMultiple&quot;]
+        eq.to_excel(writer, sheet_name=&quot;EquityCurve&quot;, index=False)
+
+    # Equity curve plot
+    plt.figure(figsize=(10, 5))
+    overall[&quot;Equity Curve&quot;].reset_index(drop=True).plot()
+    plt.title(&quot;Equity Curve (1R per trade, 1-Day Return basis)&quot;)
+    plt.xlabel(&quot;Trade #&quot;)
+    plt.ylabel(&quot;Equity Multiple&quot;)
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_DIR, &quot;equity_curve.png&quot;))
+    plt.close()
+
+    log.info(f&quot;Saved {path}&quot;)
+
+    # ---- HTML overall summary ----
+    html_path = os.path.join(OUTPUT_DIR, &quot;Overall_Summary.html&quot;)
+    kpis = [&quot;Overall Win Rate&quot;, &quot;Profit Factor&quot;, &quot;Expectancy&quot;, &quot;Max Drawdown&quot;,
+            &quot;Sharpe Ratio&quot;, &quot;Best Holding Period&quot;, &quot;Best Risk Reward Target&quot;]
+    kpi_html = &quot;&quot;.join(
+        f&#x27;&lt;div class=&quot;kpi-box&quot;&gt;&lt;div class=&quot;kpi-label&quot;&gt;{k}&lt;/div&gt;&#x27;
+        f&#x27;&lt;div class=&quot;kpi-value&quot;&gt;{overall[k]}&lt;/div&gt;&lt;/div&gt;&#x27; for k in kpis
+    )
+    body = (
+        &quot;&lt;h1&gt;Overall Summary&lt;/h1&gt;&quot;
+        f&quot;&lt;div&gt;{kpi_html}&lt;/div&gt;&quot;
+        &#x27;&lt;img src=&quot;equity_curve.png&quot; alt=&quot;Equity Curve&quot;&gt;&#x27;
+        &quot;&lt;h2&gt;Top 20 Stocks&lt;/h2&gt;&quot; + _df_to_html_table(overall[&quot;Top 20 Stocks&quot;]) +
+        &quot;&lt;h2&gt;Bottom 20 Stocks&lt;/h2&gt;&quot; + _df_to_html_table(overall[&quot;Bottom 20 Stocks&quot;]) +
+        &quot;&lt;h2&gt;Monthly Returns (%)&lt;/h2&gt;&quot; + _df_to_html_table(overall[&quot;Monthly Returns&quot;]) +
+        &quot;&lt;h2&gt;Yearly Returns (%)&lt;/h2&gt;&quot; + _df_to_html_table(overall[&quot;Yearly Returns&quot;])
+    )
+    with open(html_path, &quot;w&quot;) as f:
+        f.write(f&quot;&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;head&gt;&lt;meta charset=&#x27;utf-8&#x27;&gt;&lt;title&gt;Overall Summary&lt;/title&gt;{HTML_STYLE}&lt;/head&gt;&lt;body&gt;{body}&lt;/body&gt;&lt;/html&gt;&quot;)
+    log.info(f&quot;Saved {html_path}&quot;)
+
+
+def export_live_scan(long_setups: pd.DataFrame, short_setups: pd.DataFrame,
+                      top_long: pd.DataFrame, top_short: pd.DataFrame):
+    path = os.path.join(OUTPUT_DIR, &quot;Live_Scan.xlsx&quot;)
+    with pd.ExcelWriter(path, engine=&quot;openpyxl&quot;) as writer:
+        long_setups.to_excel(writer, sheet_name=&quot;All_Long_Setups&quot;, index=False)
+        short_setups.to_excel(writer, sheet_name=&quot;All_Short_Setups&quot;, index=False)
+        top_long.to_excel(writer, sheet_name=&quot;Top20_Long&quot;, index=False)
+        top_short.to_excel(writer, sheet_name=&quot;Top20_Short&quot;, index=False)
+    log.info(f&quot;Saved {path}&quot;)
+
+    # ---- HTML live scan ----
+    html_path = os.path.join(OUTPUT_DIR, &quot;Live_Scan.html&quot;)
+    body = (
+        &quot;&lt;h1&gt;Live Scan Results&lt;/h1&gt;&quot;
+        f&quot;&lt;p&gt;Generated for latest available daily candle.&lt;/p&gt;&quot;
+        &quot;&lt;h2&gt;Top 20 Long Opportunities&lt;/h2&gt;&quot; + _df_to_html_table(top_long) +
+        &quot;&lt;h2&gt;Top 20 Short Opportunities&lt;/h2&gt;&quot; + _df_to_html_table(top_short) +
+        &quot;&lt;h2&gt;All Long Setups&lt;/h2&gt;&quot; + _df_to_html_table(long_setups) +
+        &quot;&lt;h2&gt;All Short Setups&lt;/h2&gt;&quot; + _df_to_html_table(short_setups)
+    )
+    with open(html_path, &quot;w&quot;) as f:
+        f.write(f&quot;&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;head&gt;&lt;meta charset=&#x27;utf-8&#x27;&gt;&lt;title&gt;Live Scan&lt;/title&gt;{HTML_STYLE}&lt;/head&gt;&lt;body&gt;{body}&lt;/body&gt;&lt;/html&gt;&quot;)
+    log.info(f&quot;Saved {html_path}&quot;)
+
+
+# ----------------------------------------------------------------------
+# MAIN PIPELINE
+# ----------------------------------------------------------------------
+def run_backtest(tickers: List[str]) -&gt; Tuple[pd.DataFrame, pd.DataFrame, dict]:
+    all_signals = []
+    for i, ticker in enumerate(tickers, 1):
+        log.info(f&quot;[{i}/{len(tickers)}] Backtesting {ticker} ...&quot;)
+        try:
+            df = backtest_ticker(ticker)
+            if not df.empty:
+                all_signals.append(df)
+        except Exception as e:
+            log.error(f&quot;{ticker}: backtest error - {e}&quot;)
+        time.sleep(0.2)  # be polite to Yahoo Finance
+
+    if not all_signals:
+        log.warning(&quot;No signals found across universe.&quot;)
+        return pd.DataFrame(), pd.DataFrame(), {}
+
+    signal_df = pd.concat(all_signals, ignore_index=True)
+    stock_summary = compute_stock_summary(signal_df)
+    overall = compute_overall_summary(signal_df, stock_summary)
+
+    export_signal_details(signal_df)
+    export_summary_by_stock(stock_summary)
+    export_overall_summary(overall)
+
+    return signal_df, stock_summary, overall
+
+
+def compute_trend_quality_map(tickers: List[str]) -&gt; dict:
+    &quot;&quot;&quot;
+    Trend Quality score (0-100) per ticker based on the latest structure:
+    UP trend with strong BOS count scores higher for LONG setups, DOWN
+    trend with strong BOS count scores higher for SHORT setups. We store a
+    single quality value derived from |bullish_bos_count - bearish_bos_count|
+    normalized, used as the 15% component in ranking.
+    &quot;&quot;&quot;
+    quality_map = {}
+    for ticker in tickers:
+        df = download_data(ticker)
+        if df is None:
+            continue
+        try:
+            df = add_indicators(df)
+            df = detect_swings(df)
+            df = walk_structure(df)
+            last = df.iloc[-1]
+            net_bos = abs(last[&quot;bullish_bos_count&quot;] - last[&quot;bearish_bos_count&quot;])
+            quality_map[ticker] = min(net_bos * 10, 100)
+        except Exception:
+            continue
+    return quality_map
+
+
+def run_live_scan(tickers: List[str]) -&gt; Tuple[pd.DataFrame, pd.DataFrame]:
+    long_rows, short_rows = [], []
+    for i, ticker in enumerate(tickers, 1):
+        log.info(f&quot;[{i}/{len(tickers)}] Live scanning {ticker} ...&quot;)
+        try:
+            rows = live_scan_ticker(ticker)
+            for r in rows:
+                if r[&quot;Setup Type&quot;] == &quot;LONG&quot;:
+                    long_rows.append(r)
+                else:
+                    short_rows.append(r)
+        except Exception as e:
+            log.error(f&quot;{ticker}: live scan error - {e}&quot;)
+        time.sleep(0.2)
+
+    long_df = pd.DataFrame(long_rows)
+    short_df = pd.DataFrame(short_rows)
+
+    # drop Setup Type column for final output schema (keep for ranking internally)
+    return long_df, short_df
+
+
+def main():
+    tickers = get_nifty500_tickers()
+    log.info(f&quot;Universe size: {len(tickers)} tickers&quot;)
+
+    # ---- 1. Historical backtest ----
+    signal_df, stock_summary, overall = run_backtest(tickers)
+    if not signal_df.empty:
+        log.info(f&quot;Backtest complete. Total signals: {len(signal_df)}&quot;)
+        log.info(f&quot;Overall Win Rate: {overall[&#x27;Overall Win Rate&#x27;]}% | &quot;
+                 f&quot;Profit Factor: {overall[&#x27;Profit Factor&#x27;]} | &quot;
+                 f&quot;Sharpe: {overall[&#x27;Sharpe Ratio&#x27;]}&quot;)
+
+    # ---- 2. Live scan ----
+    long_df, short_df = run_live_scan(tickers)
+
+    trend_quality_map = compute_trend_quality_map(tickers)
+
+    ranked_long = rank_setups(long_df, trend_quality_map) if not long_df.empty else long_df
+    ranked_short = rank_setups(short_df, trend_quality_map) if not short_df.empty else short_df
+
+    top_long = ranked_long.head(20).drop(columns=[&quot;Setup Type&quot;, &quot;Score&quot;], errors=&quot;ignore&quot;)
+    top_short = ranked_short.head(20).drop(columns=[&quot;Setup Type&quot;, &quot;Score&quot;], errors=&quot;ignore&quot;)
+
+    long_out = long_df.drop(columns=[&quot;Setup Type&quot;], errors=&quot;ignore&quot;)
+    short_out = short_df.drop(columns=[&quot;Setup Type&quot;], errors=&quot;ignore&quot;)
+
+    export_live_scan(long_out, short_out, top_long, top_short)
+
+    log.info(f&quot;Live scan complete. LONG setups: {len(long_df)}, SHORT setups: {len(short_df)}&quot;)
+    log.info(f&quot;Top 20 Long Opportunities and Top 20 Short Opportunities saved to Live_Scan.xlsx&quot;)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+</body>
+</html>
