@@ -44,6 +44,19 @@ except Exception as e:
 app = Flask(__name__)
 CORS(app)
 
+def clean_numpy(obj):
+    if isinstance(obj, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):
+        return int(obj)
+    elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: clean_numpy(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_numpy(v) for v in obj]
+    return obj
+
 # ─────────────────────────────────────────────
 # UNIVERSE
 # ─────────────────────────────────────────────
@@ -471,6 +484,7 @@ def run_scan():
             "nifty50": nifty,
             "picks": top_picks,
         }
+        return jsonify(clean_numpy(response_data))
 
     elif strategy == "priyank":
         if not psbb_analyze:
@@ -503,6 +517,7 @@ def run_scan():
             "nifty50": nifty,
             "picks": top_picks,
         }
+        return jsonify(clean_numpy(response_data))
 
     elif strategy == "darvax":
         if not darvax_analyze:
@@ -535,6 +550,7 @@ def run_scan():
             "nifty50": nifty,
             "picks": top_picks,
         }
+        return jsonify(clean_numpy(response_data))
 
     elif strategy == "boschoch_bull":
         if not boschoch_analyze:
@@ -567,6 +583,7 @@ def run_scan():
             "nifty50": nifty,
             "picks": top_picks,
         }
+        return jsonify(clean_numpy(response_data))
 
     elif strategy == "boschoch_bear":
         if not boschoch_analyze:
@@ -599,6 +616,7 @@ def run_scan():
             "nifty50": nifty,
             "picks": top_picks,
         }
+        return jsonify(clean_numpy(response_data))
     else:
         return jsonify({"error": "Unknown strategy"}), 400
 
