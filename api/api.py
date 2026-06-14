@@ -43,8 +43,9 @@ CORS(app)
 # UNIVERSE
 # ─────────────────────────────────────────────
 UNIVERSE = []
-if os.path.exists('universe.json'):
-    with open('universe.json', 'r') as f:
+universe_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'universe.json')
+if os.path.exists(universe_path):
+    with open(universe_path, 'r') as f:
         UNIVERSE = json.load(f)
 else:
     UNIVERSE = [{"sym":"HDFCBANK","yf":"HDFCBANK.NS","sector":"Banking"}]
