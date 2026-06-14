@@ -316,22 +316,22 @@ def analyze_priyank_worker(stock):
     """PSBB — Priyank Sharma Bread & Butter scanner.
     Uses SMC: FVG, Order Block, BOS market structure, RSI divergence, 21 EMA.
     """
-    if not priyank_analyze:
+    if not psbb_analyze:
         return None
     try:
         ticker = yf.Ticker(stock["yf"])
         df = ticker.history(period="1y", interval="1d", auto_adjust=True)
-        if df.empty or len(df) < 60:
+        if df.empty or len(df) < 50:
             return None
 
         df_lower = df[["Open", "High", "Low", "Close", "Volume"]].copy()
         df_lower.columns = ["open", "high", "low", "close", "volume"]
 
         result = psbb_analyze(df_lower, stock)
-        if result and result.get("score", 0) >= 36:  # min 2 confluence factors
+        if result and result.get("score", 0) >= 10:  # min 1 confluence factor
             result["sym"] = stock["sym"]
             result["sector"] = stock["sector"]
-            result["price"] = result["entry"]
+            result["price"] = result.get("entry", df_lower["close"].iloc[-1])
             return result
     except Exception as e:
         print(f"PSBB worker error ({stock['sym']}): {e}")
@@ -343,17 +343,38 @@ def analyze_darvax_worker(stock):
     try:
         ticker = yf.Ticker(stock["yf"])
         df = ticker.history(period="1y", interval="1d", auto_adjust=True)
-        if df.empty or len(df) < 100:
+        if df.empty or len(df) < 60:
             return None
         df_lower = df[["Open", "High", "Low", "Close", "Volume"]].copy()
         df_lower.columns = ["open", "high", "low", "close", "volume"]
         da = darvax_analyze(df_lower, stock)
-        if da and da.get("trade") and da.get("score", 0) >= 15:
+        # DarvaX: accept any setup with score>=20, even if trade is not set yet
+        if da and da.get("score", 0) >= 20:
+            # If no trade object, create a basic one from available data
+            if not da.get("trade"):
+                price = da.get("price", 0)
+                atr = da.get("atr", price * 0.02)
+                ema20 = da.get("ema20", price)
+                bc_ceil = da.get("box_ceil")
+                bc_floor = da.get("box_floor")
+                entry = round((bc_ceil or price) * 1.001, 2)
+                sl = round(bc_floor or (price - 2 * atr), 2)
+                risk = max(entry - sl, price * 0.02)
+                da["trade"] = {
+                    "entry": entry, "sl": sl, "sl_pct": round((entry - sl) / entry * 100, 1),
+                    "t1": round(entry + risk, 2), "t2": round(entry + risk * 2, 2),
+                    "t3": round(entry + risk * 3.5, 2),
+                    "rr1": round(risk / max(entry - sl, 0.01), 1),
+                    "rr2": round(risk * 2 / max(entry - sl, 0.01), 1),
+                    "timing": f"Watch for breakout above ₹{bc_ceil or entry:.0f} with high volume",
+                    "ema10": da.get("ema10", price), "ema20": da.get("ema20", price),
+                    "ema200": da.get("ema200", price)
+                }
             da["sym"] = stock["sym"]
             da["sector"] = stock["sector"]
             return da
-    except:
-        pass
+    except Exception as e:
+        print(f"DarvaX worker error ({stock['sym']}): {e}")
     return None
 
 def analyze_boschoch_worker(stock):

@@ -41,7 +41,7 @@ warnings.filterwarnings("ignore")
 SWING_LENGTH = 5
 ATR_PERIOD = 14
 VOL_AVG_PERIOD = 20
-DISPLACEMENT_ATR_MULT = 0.5
+DISPLACEMENT_ATR_MULT = 0.1  # relaxed from 0.5 — catches more setups
 EIGHT_DAY_HOLD = 8
 
 OUTPUT_DIR = "smc_output"
@@ -719,7 +719,7 @@ def compute_overall_summary(signal_df: pd.DataFrame, stock_summary: pd.DataFrame
 # ----------------------------------------------------------------------
 # LIVE SCANNER
 # ----------------------------------------------------------------------
-def live_scan_from_df(df: pd.DataFrame, ticker: str, setup_filter: str = None, lookback: int = 5) -> List[dict]:
+def live_scan_from_df(df: pd.DataFrame, ticker: str, setup_filter: str = None, lookback: int = 20) -> List[dict]:
     """
     Returns signals from the most recent `lookback` candles.
     setup_filter: 'LONG', 'SHORT', or None (both).
