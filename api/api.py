@@ -339,7 +339,8 @@ def analyze_priyank_worker(stock):
             result["price"] = result.get("entry", df_lower["close"].iloc[-1])
             return result
     except Exception as e:
-        print(f"PSBB worker error ({stock['sym']}): {e}")
+        import traceback
+        return {"error": True, "msg": traceback.format_exc()}
     return None
 
 def analyze_darvax_worker(stock):
@@ -355,11 +356,9 @@ def analyze_darvax_worker(stock):
         da = darvax_analyze(df_lower, stock)
         # DarvaX: accept any setup with score>=20, even if trade is not set yet
         if da and da.get("score", 0) >= 20:
-            # If no trade object, create a basic one from available data
             if not da.get("trade"):
                 price = da.get("price", 0)
                 atr = da.get("atr", price * 0.02)
-                ema20 = da.get("ema20", price)
                 bc_ceil = da.get("box_ceil")
                 bc_floor = da.get("box_floor")
                 entry = round((bc_ceil or price) * 1.001, 2)
@@ -379,7 +378,8 @@ def analyze_darvax_worker(stock):
             da["sector"] = stock["sector"]
             return da
     except Exception as e:
-        print(f"DarvaX worker error ({stock['sym']}): {e}")
+        import traceback
+        return {"error": True, "msg": traceback.format_exc()}
     return None
 
 def _boschoch_worker(stock, setup_filter):
@@ -393,7 +393,6 @@ def _boschoch_worker(stock, setup_filter):
             return None
         bc = boschoch_analyze(df, stock["sym"], setup_filter=setup_filter)
         if bc and len(bc) > 0:
-            # Pick the most recent (last in list)
             setup = sorted(bc, key=lambda x: x.get("BOS Strength Score", 0), reverse=True)[0]
             return {
                 "sym": stock["sym"],
@@ -410,7 +409,8 @@ def _boschoch_worker(stock, setup_filter):
                 "thesis": f"Entry: {setup.get('Entry')} | Risk: {setup.get('Risk %')}% | T1: {setup.get('Target 1R')} | T2: {setup.get('Target 2R')} | Vol: {setup.get('Volume Ratio')}x avg"
             }
     except Exception as e:
-        print(f"BOS CHOCH worker error ({stock['sym']}): {e}")
+        import traceback
+        return {"error": True, "msg": traceback.format_exc()}
     return None
 
 def analyze_boschoch_bull_worker(stock):
@@ -476,12 +476,20 @@ def run_scan():
         if not psbb_analyze:
             return jsonify({"status": "error", "message": "PSBB Import Failed", "trace": import_errors.get('psbb')}), 500
         results = []
+        errors = []
         with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(analyze_priyank_worker, s): s for s in UNIVERSE}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
-                    results.append(r)
+                    if r.get("error"):
+                        errors.append(r["msg"])
+                    else:
+                        results.append(r)
+        
+        if errors and not results:
+            return jsonify({"status": "error", "message": "Execution Error", "trace": errors[0]}), 500
+            
         results.sort(key=lambda x: (-x["score"], -x["vol_ratio"], x["sym"]))
         top_picks = results[:3]
         elapsed = round(time.time() - t0, 1)
@@ -500,12 +508,20 @@ def run_scan():
         if not darvax_analyze:
             return jsonify({"status": "error", "message": "DarvaX Import Failed", "trace": import_errors.get('darvax')}), 500
         results = []
+        errors = []
         with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(analyze_darvax_worker, s): s for s in UNIVERSE}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
-                    results.append(r)
+                    if r.get("error"):
+                        errors.append(r["msg"])
+                    else:
+                        results.append(r)
+        
+        if errors and not results:
+            return jsonify({"status": "error", "message": "Execution Error", "trace": errors[0]}), 500
+            
         results.sort(key=lambda x: (-x["score"], -x.get("vr", 0), x["sym"]))
         top_picks = results[:3]
         elapsed = round(time.time() - t0, 1)
@@ -524,12 +540,20 @@ def run_scan():
         if not boschoch_analyze:
             return jsonify({"status": "error", "message": "BOSCHOCH Import Failed", "trace": import_errors.get('boschoch')}), 500
         results = []
+        errors = []
         with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(analyze_boschoch_bull_worker, s): s for s in UNIVERSE}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
-                    results.append(r)
+                    if r.get("error"):
+                        errors.append(r["msg"])
+                    else:
+                        results.append(r)
+        
+        if errors and not results:
+            return jsonify({"status": "error", "message": "Execution Error", "trace": errors[0]}), 500
+            
         results.sort(key=lambda x: (-x["score"], x["sym"]))
         top_picks = results[:5]
         elapsed = round(time.time() - t0, 1)
@@ -548,12 +572,20 @@ def run_scan():
         if not boschoch_analyze:
             return jsonify({"status": "error", "message": "BOSCHOCH Import Failed", "trace": import_errors.get('boschoch')}), 500
         results = []
+        errors = []
         with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(analyze_boschoch_bear_worker, s): s for s in UNIVERSE}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
-                    results.append(r)
+                    if r.get("error"):
+                        errors.append(r["msg"])
+                    else:
+                        results.append(r)
+        
+        if errors and not results:
+            return jsonify({"status": "error", "message": "Execution Error", "trace": errors[0]}), 500
+            
         results.sort(key=lambda x: (-x["score"], x["sym"]))
         top_picks = results[:5]
         elapsed = round(time.time() - t0, 1)
