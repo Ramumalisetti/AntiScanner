@@ -428,21 +428,73 @@ export default function App() {
     if (!s) return;
     s.setState('loading');
     s.setErr('');
+
     try {
-      const res = await fetch(`${API}/api/scan?strategy=${strategy}`);
-      if (!res.ok) {
-        let errJson = {};
-        try { errJson = await res.json(); } catch(e) {}
-        throw new Error(errJson.trace || errJson.message || `HTTP ${res.status}`);
+      const TOTAL = 504;
+      const CHUNK = 50;
+      const sortKeys = {
+        confluence:    (a, b) => (b.score - a.score) || a.sym.localeCompare(b.sym),
+        priyank:       (a, b) => (b.score - a.score) || (b.vol_ratio - a.vol_ratio) || a.sym.localeCompare(b.sym),
+        darvax:        (a, b) => (b.score - a.score) || a.sym.localeCompare(b.sym),
+        boschoch_bull: (a, b) => (b.score - a.score) || a.sym.localeCompare(b.sym),
+        boschoch_bear: (a, b) => (b.score - a.score) || a.sym.localeCompare(b.sym),
+      };
+      const topN = { confluence: 5, priyank: 5, darvax: 5, boschoch_bull: 5, boschoch_bear: 5 };
+
+      // Build chunk requests: e.g. start=0,50,100,...,500 with limit=50
+      const chunks = [];
+      for (let start = 0; start < TOTAL; start += CHUNK) {
+        chunks.push(start);
       }
-      const json = await res.json();
-      s.setData(json);
+
+      // Fire all chunk requests in parallel
+      const chunkResults = await Promise.all(
+        chunks.map(async (start) => {
+          const res = await fetch(`${API}/api/scan?strategy=${strategy}&start=${start}&limit=${CHUNK}`);
+          if (!res.ok) {
+            let errJson = {};
+            try { errJson = await res.json(); } catch(e) {}
+            throw new Error(errJson.trace || errJson.message || `HTTP ${res.status} at chunk ${start}`);
+          }
+          return res.json();
+        })
+      );
+
+      // Aggregate all picks from all chunks
+      let allPicks = [];
+      let nifty50 = null;
+      let scanTime = null;
+      let totalScanned = 0;
+
+      for (const cr of chunkResults) {
+        if (cr.picks) allPicks = allPicks.concat(cr.picks);
+        if (!nifty50 && cr.nifty50) nifty50 = cr.nifty50;
+        if (!scanTime && cr.scan_time) scanTime = cr.scan_time;
+        if (cr.scanned) totalScanned += cr.scanned;
+      }
+
+      // Global sort + limit to top N
+      allPicks.sort(sortKeys[strategy] || sortKeys.confluence);
+      const topPicks = allPicks.slice(0, topN[strategy] || 5);
+
+      const aggregated = {
+        status: 'success',
+        strategy,
+        scan_time: scanTime,
+        scanned: totalScanned,
+        found: allPicks.length,
+        nifty50: nifty50,
+        picks: topPicks,
+      };
+
+      s.setData(aggregated);
       s.setState('done');
       fetchHistory();
     } catch (e) {
       s.setErr(e.message || 'Cannot connect to API. Start python api.py');
       s.setState('error');
     }
+
   };
 
   return (

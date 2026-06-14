@@ -453,11 +453,18 @@ CACHE_DURATION = 0  # Disabled for live testing
 def run_scan():
     from flask import request
     strategy = request.args.get('strategy', 'confluence')
+    # Batch/chunk support: frontend sends start + limit to scan a slice
+    start = int(request.args.get('start', 0))
+    limit = int(request.args.get('limit', len(UNIVERSE)))
     t0 = time.time()
 
-    # Check per-strategy cache
+    # Slice the universe for this chunk
+    chunk = UNIVERSE[start: start + limit]
+
+    # Only use cache for full scans (no start/limit passed)
+    is_full_scan = (start == 0 and limit >= len(UNIVERSE))
     cache = CACHES.get(strategy, CACHES["confluence"])
-    if cache["data"] and (t0 - cache["ts"] < CACHE_DURATION):
+    if is_full_scan and cache["data"] and (t0 - cache["ts"] < CACHE_DURATION):
         return jsonify(cache["data"])
 
     nifty = fetch_market_health()
@@ -466,20 +473,20 @@ def run_scan():
     if strategy == "confluence":
         results = []
         with ThreadPoolExecutor(max_workers=30) as ex:
-            futures = {ex.submit(analyze_confluence_worker, s): s for s in UNIVERSE}
+            futures = {ex.submit(analyze_confluence_worker, s): s for s in chunk}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
                     results.append(r)
         results.sort(key=lambda x: (-x["score"], x["rsi"], x["sym"]))
-        top_picks = results[:3]
+        top_picks = results
         elapsed = round(time.time() - t0, 1)
         response_data = {
             "status": "success",
             "strategy": "confluence",
             "scan_time": scan_time,
             "elapsed": elapsed,
-            "scanned": len(UNIVERSE),
+            "scanned": len(chunk),
             "found": len(results),
             "nifty50": nifty,
             "picks": top_picks,
@@ -492,7 +499,7 @@ def run_scan():
         results = []
         errors = []
         with ThreadPoolExecutor(max_workers=30) as ex:
-            futures = {ex.submit(analyze_priyank_worker, s): s for s in UNIVERSE}
+            futures = {ex.submit(analyze_priyank_worker, s): s for s in chunk}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
@@ -505,14 +512,14 @@ def run_scan():
             return jsonify({"status": "error", "message": "Execution Error", "trace": errors[0]}), 500
             
         results.sort(key=lambda x: (-x["score"], -x["vol_ratio"], x["sym"]))
-        top_picks = results[:3]
+        top_picks = results
         elapsed = round(time.time() - t0, 1)
         response_data = {
             "status": "success",
             "strategy": "priyank",
             "scan_time": scan_time,
             "elapsed": elapsed,
-            "scanned": len(UNIVERSE),
+            "scanned": len(chunk),
             "found": len(results),
             "nifty50": nifty,
             "picks": top_picks,
@@ -525,7 +532,7 @@ def run_scan():
         results = []
         errors = []
         with ThreadPoolExecutor(max_workers=30) as ex:
-            futures = {ex.submit(analyze_darvax_worker, s): s for s in UNIVERSE}
+            futures = {ex.submit(analyze_darvax_worker, s): s for s in chunk}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
@@ -538,14 +545,14 @@ def run_scan():
             return jsonify({"status": "error", "message": "Execution Error", "trace": errors[0]}), 500
             
         results.sort(key=lambda x: (-x["score"], -x.get("vr", 0), x["sym"]))
-        top_picks = results[:3]
+        top_picks = results
         elapsed = round(time.time() - t0, 1)
         response_data = {
             "status": "success",
             "strategy": "darvax",
             "scan_time": scan_time,
             "elapsed": elapsed,
-            "scanned": len(UNIVERSE),
+            "scanned": len(chunk),
             "found": len(results),
             "nifty50": nifty,
             "picks": top_picks,
@@ -558,7 +565,7 @@ def run_scan():
         results = []
         errors = []
         with ThreadPoolExecutor(max_workers=30) as ex:
-            futures = {ex.submit(analyze_boschoch_bull_worker, s): s for s in UNIVERSE}
+            futures = {ex.submit(analyze_boschoch_bull_worker, s): s for s in chunk}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
@@ -571,14 +578,14 @@ def run_scan():
             return jsonify({"status": "error", "message": "Execution Error", "trace": errors[0]}), 500
             
         results.sort(key=lambda x: (-x["score"], x["sym"]))
-        top_picks = results[:5]
+        top_picks = results
         elapsed = round(time.time() - t0, 1)
         response_data = {
             "status": "success",
             "strategy": "boschoch_bull",
             "scan_time": scan_time,
             "elapsed": elapsed,
-            "scanned": len(UNIVERSE),
+            "scanned": len(chunk),
             "found": len(results),
             "nifty50": nifty,
             "picks": top_picks,
@@ -591,7 +598,7 @@ def run_scan():
         results = []
         errors = []
         with ThreadPoolExecutor(max_workers=30) as ex:
-            futures = {ex.submit(analyze_boschoch_bear_worker, s): s for s in UNIVERSE}
+            futures = {ex.submit(analyze_boschoch_bear_worker, s): s for s in chunk}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
@@ -604,14 +611,14 @@ def run_scan():
             return jsonify({"status": "error", "message": "Execution Error", "trace": errors[0]}), 500
             
         results.sort(key=lambda x: (-x["score"], x["sym"]))
-        top_picks = results[:5]
+        top_picks = results
         elapsed = round(time.time() - t0, 1)
         response_data = {
             "status": "success",
             "strategy": "boschoch_bear",
             "scan_time": scan_time,
             "elapsed": elapsed,
-            "scanned": len(UNIVERSE),
+            "scanned": len(chunk),
             "found": len(results),
             "nifty50": nifty,
             "picks": top_picks,
