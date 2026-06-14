@@ -430,13 +430,17 @@ export default function App() {
     s.setErr('');
     try {
       const res = await fetch(`${API}/api/scan?strategy=${strategy}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        let errJson = {};
+        try { errJson = await res.json(); } catch(e) {}
+        throw new Error(errJson.trace || errJson.message || `HTTP ${res.status}`);
+      }
       const json = await res.json();
       s.setData(json);
       s.setState('done');
       fetchHistory();
     } catch (e) {
-      s.setErr('Cannot connect to API. Start python api.py');
+      s.setErr(e.message || 'Cannot connect to API. Start python api.py');
       s.setState('error');
     }
   };
