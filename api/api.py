@@ -14,8 +14,10 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 
-# (Removed sys.path appending; Vercel now runs api.py directly from the root directory)
-
+# Ensure local directory is in sys.path so Vercel can import sibling modules
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
 try:
     from psbb_scanner import psbb_analyze
     priyank_analyze = True
