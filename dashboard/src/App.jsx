@@ -121,15 +121,41 @@ function ConfluenceCard({ pick, rank }) {
 }
 
 function AnalystCard({ pick, analystName, badgeText, colorClass }) {
-  const t = pick.trade || {};
-  const isPriyank = analystName === "Priyank Sharma";
-  const signals = pick.signals || [];
-  
+  const isPriyank = analystName === "Priyank Sharma" || analystName === "SMC";
+
+  // Normalize trade object if backend sends a string
+  let t = pick.trade || {};
+  if (typeof t === 'string') {
+    const entry = pick.entry || pick.price;
+    const sl = pick.stop_loss || pick.sl;
+    const t1 = pick.t1 || pick.target1;
+    const t2 = pick.t2 || pick.target2;
+    const risk = Math.abs(entry - sl) || 1;
+    t = {
+      entry: entry,
+      sl: sl,
+      sl_pct: entry && sl ? ((risk / entry) * 100).toFixed(1) : '-',
+      t1: t1,
+      t2: t2,
+      rr1: t1 && entry ? ((Math.abs(t1 - entry) / risk)).toFixed(1) : 1,
+      rr2: t2 && entry ? ((Math.abs(t2 - entry) / risk)).toFixed(1) : 1,
+      timing: pick.timing || pick.desc || '-'
+    };
+  }
+
+  // Normalize signals
+  let signals = pick.signals || [];
+  if (signals.length === 0 && pick.confluence_factors) {
+    signals = pick.confluence_factors.map(f => ({ sig: f.replace(' ✓', '').replace('✓✓', ''), desc: 'Confluence Factor', type: pick.setup_direction || 'BULL' }));
+  } else if (signals.length === 0 && pick.thesis) {
+    signals = [{ sig: 'THESIS', desc: pick.thesis, type: 'BULL' }];
+  }
+
   return (
     <div className={`trade-card analyst-card ${colorClass}`}>
       <div className="card-head">
         <div className="card-head-left">
-          <span className="rank-badge" style={{fontSize: '1.2rem'}}>{isPriyank ? '🙋‍♂️' : '📈'}</span>
+          <span className="rank-badge" style={{fontSize: '1.2rem'}}>{analystName === "Priyank Sharma" ? '🍞' : analystName === "SMC" ? '⚡' : '📈'}</span>
           <div>
             <h2 className="sym">{pick.sym}</h2>
             <span className="sector-tag">{pick.sector}</span>

@@ -374,6 +374,11 @@ def _boschoch_worker(stock, setup_filter):
                 "sector": stock["sector"],
                 "trade": "BUY" if setup.get("Setup Type") == "LONG" else "SELL",
                 "price": setup.get("Entry"),
+                "entry": setup.get("Entry"),
+                "sl": setup.get("Stop Loss"),
+                "t1": setup.get("Target 1R"),
+                "t2": setup.get("Target 2R"),
+                "setup_direction": setup.get("Setup Type"),
                 "score": int(setup.get("BOS Strength Score", 0) * 10),
                 "desc": f"BOS CHOCH {setup.get('Setup Type')} — SL: {setup.get('Stop Loss')}",
                 "thesis": f"Entry: {setup.get('Entry')} | Risk: {setup.get('Risk %')}% | T1: {setup.get('Target 1R')} | T2: {setup.get('Target 2R')} | Vol: {setup.get('Volume Ratio')}x avg"
