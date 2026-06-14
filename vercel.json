@@ -2,14 +2,14 @@
   "buildCommand": "cd dashboard && npm install && npm run build",
   "outputDirectory": "dashboard/dist",
   "functions": {
-    "api/index.py": {
+    "api.py": {
       "maxDuration": 60
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.py"
+      "destination": "/api.py"
     }
   ]
 }
