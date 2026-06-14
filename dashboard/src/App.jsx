@@ -382,13 +382,9 @@ export default function App() {
   const [darvData,  setDarvData]  = useState(null);
   const [darvErr,   setDarvErr]   = useState('');
 
-  const [bosBullState, setBosBullState] = useState('idle');
-  const [bosBullData,  setBosBullData]  = useState(null);
-  const [bosBullErr,   setBosBullErr]   = useState('');
-
-  const [bosBearState, setBosBearState] = useState('idle');
-  const [bosBearData,  setBosBearData]  = useState(null);
-  const [bosBearErr,   setBosBearErr]   = useState('');
+  const [boschochState, setBoschochState] = useState('idle');
+  const [boschochData, setBoschochData] = useState(null);
+  const [boschochErr, setBoschochErr] = useState('');
 
   const [history, setHistory] = useState([]);
 
@@ -421,10 +417,10 @@ export default function App() {
       confluence:    { setState: setConfState,    setData: setConfData,    setErr: setConfErr },
       priyank:       { setState: setPriyState,    setData: setPriyData,    setErr: setPriyErr },
       darvax:        { setState: setDarvState,    setData: setDarvData,    setErr: setDarvErr },
-      boschoch_bull: { setState: setBosBullState, setData: setBosBullData, setErr: setBosBullErr },
-      boschoch_bear: { setState: setBosBearState, setData: setBosBearData, setErr: setBosBearErr },
+      boschoch:      { setState: setBoschochState, setData: setBoschochData, setErr: setBoschochErr },
     };
     const s = setters[strategy];
+    if (!s) return;
     s.setState('loading');
     s.setErr('');
     try {
@@ -477,18 +473,11 @@ export default function App() {
               {darvState === 'loading' ? <><MiniSpinner color="#9d7cfc" /> Scanning…</> : <>📈 DarvaX Analysis</>}
             </button>
             <button
-              className={`scan-btn scan-btn-boschoch-bull ${bosBullState === 'loading' ? 'scanning' : ''}`}
-              onClick={() => runScan('boschoch_bull')}
-              disabled={bosBullState === 'loading'}
+              className={`scan-btn scan-btn-boschoch ${boschochState === 'loading' ? 'scanning' : ''}`}
+              onClick={() => runScan('boschoch')}
+              disabled={boschochState === 'loading'}
             >
-              {bosBullState === 'loading' ? <><MiniSpinner color="#22c55e" /> Scanning…</> : <>🐂 BOS CHOCH BULL</>}
-            </button>
-            <button
-              className={`scan-btn scan-btn-boschoch-bear ${bosBearState === 'loading' ? 'scanning' : ''}`}
-              onClick={() => runScan('boschoch_bear')}
-              disabled={bosBearState === 'loading'}
-            >
-              {bosBearState === 'loading' ? <><MiniSpinner color="#ef4444" /> Scanning…</> : <>🐻 BOS CHOCH BEAR</>}
+              {boschochState === 'loading' ? <><MiniSpinner color="#10b981" /> Scanning…</> : <>⚡ BOS CHOCH Reversals</>}
             </button>
           </div>
         </div>
@@ -550,39 +539,20 @@ export default function App() {
           )}
         />
 
-        {/* ── Section 4: BOS CHOCH BULL ── */}
+        {/* ── Section 4: BOS CHOCH Reversals ── */}
         <StrategySection
-          title="BOS CHOCH — Bullish Reversal (LONG)"
-          subtitle="SMC: Uptrend → Bearish CHOCH → Bearish BOS → Bullish BOS reversal with displacement + volume"
-          icon="🐂"
-          headerClass="boschoch-bull-header"
-          pillClass="boschoch-bull-pill"
-          state={bosBullState}
-          data={bosBullData}
-          err={bosBullErr}
+          title="BOS & CHOCH Reversals"
+          subtitle="Smart Money Concepts: BOS -> CHOCH -> BOS Reversal setups (Long & Short)"
+          icon="⚡"
+          headerClass="boschoch-header"
+          pillClass="boschoch-pill"
+          state={boschochState}
+          data={boschochData}
+          err={boschochErr}
           renderCards={(data) => (
             <div className="cards-grid">
-              {data.picks.map((pick, i) => (
-                <AnalystCard key={pick.sym} pick={pick} analystName="SMC" badgeText="BOS CHOCH BULL" colorClass="boschoch-bull-card" />
-              ))}
-            </div>
-          )}
-        />
-
-        {/* ── Section 5: BOS CHOCH BEAR ── */}
-        <StrategySection
-          title="BOS CHOCH — Bearish Reversal (SHORT)"
-          subtitle="SMC: Downtrend → Bullish CHOCH → Bullish BOS → Bearish BOS reversal with displacement + volume"
-          icon="🐻"
-          headerClass="boschoch-bear-header"
-          pillClass="boschoch-bear-pill"
-          state={bosBearState}
-          data={bosBearData}
-          err={bosBearErr}
-          renderCards={(data) => (
-            <div className="cards-grid">
-              {data.picks.map((pick, i) => (
-                <AnalystCard key={pick.sym} pick={pick} analystName="SMC" badgeText="BOS CHOCH BEAR" colorClass="boschoch-bear-card" />
+              {data.picks.map((p, i) => (
+                <AnalystCard key={i} pick={p} analystName="SMC" badgeText={p.trade === "BUY" ? "LONG SETUP" : "SHORT SETUP"} colorClass="card-boschoch" />
               ))}
             </div>
           )}
