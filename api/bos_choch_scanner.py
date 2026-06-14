@@ -44,16 +44,23 @@ VOL_AVG_PERIOD = 20
 DISPLACEMENT_ATR_MULT = 0.1  # relaxed from 0.5 — catches more setups
 EIGHT_DAY_HOLD = 8
 
-OUTPUT_DIR = "smc_output"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Use /tmp on Vercel (read-only filesystem), local dir otherwise
+OUTPUT_DIR = "/tmp/smc_output" if os.environ.get("VERCEL") else "smc_output"
+try:
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+except Exception:
+    OUTPUT_DIR = "/tmp"
+
+_handlers = [logging.StreamHandler()]
+try:
+    _handlers.append(logging.FileHandler(os.path.join(OUTPUT_DIR, "run.log")))
+except Exception:
+    pass
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
-    handlers=[
-        logging.FileHandler(os.path.join(OUTPUT_DIR, "run.log")),
-        logging.StreamHandler()
-    ]
+    handlers=_handlers
 )
 log = logging.getLogger("SMC")
 
