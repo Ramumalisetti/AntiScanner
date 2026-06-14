@@ -18,24 +18,27 @@ import pandas as pd
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.append(current_dir)
+import traceback
+import_errors = {}
+
 try:
     from psbb_scanner import psbb_analyze
     priyank_analyze = True
 except Exception as e:
-    print(f"Failed to import psbb_scanner: {e}")
+    import_errors['psbb'] = traceback.format_exc()
     psbb_analyze = None
     priyank_analyze = None
 
 try:
     from darvax_scanner import analyze as darvax_analyze
 except Exception as e:
-    print(f"Failed to import darvax_scanner: {e}")
+    import_errors['darvax'] = traceback.format_exc()
     darvax_analyze = None
 
 try:
     from bos_choch_scanner import live_scan_from_df as boschoch_analyze
 except Exception as e:
-    print(f"Failed to import bos_choch_scanner: {e}")
+    import_errors['boschoch'] = traceback.format_exc()
     boschoch_analyze = None
 
 app = Flask(__name__)
@@ -470,6 +473,8 @@ def run_scan():
         }
 
     elif strategy == "priyank":
+        if not psbb_analyze:
+            return jsonify({"status": "error", "message": "PSBB Import Failed", "trace": import_errors.get('psbb')}), 500
         results = []
         with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(analyze_priyank_worker, s): s for s in UNIVERSE}
@@ -492,6 +497,8 @@ def run_scan():
         }
 
     elif strategy == "darvax":
+        if not darvax_analyze:
+            return jsonify({"status": "error", "message": "DarvaX Import Failed", "trace": import_errors.get('darvax')}), 500
         results = []
         with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(analyze_darvax_worker, s): s for s in UNIVERSE}
@@ -514,6 +521,8 @@ def run_scan():
         }
 
     elif strategy == "boschoch_bull":
+        if not boschoch_analyze:
+            return jsonify({"status": "error", "message": "BOSCHOCH Import Failed", "trace": import_errors.get('boschoch')}), 500
         results = []
         with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(analyze_boschoch_bull_worker, s): s for s in UNIVERSE}
@@ -536,6 +545,8 @@ def run_scan():
         }
 
     elif strategy == "boschoch_bear":
+        if not boschoch_analyze:
+            return jsonify({"status": "error", "message": "BOSCHOCH Import Failed", "trace": import_errors.get('boschoch')}), 500
         results = []
         with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(analyze_boschoch_bear_worker, s): s for s in UNIVERSE}
