@@ -620,15 +620,21 @@ def run_scan():
     else:
         return jsonify({"error": "Unknown strategy"}), 400
 
-    response_data = convert_numpy(response_data)
-
-    # Save to history
-    save_to_history(scan_time, len(UNIVERSE), response_data["found"], response_data["picks"], nifty, strategy)
-
-    # Update per-strategy cache
-    CACHES[strategy] = {"data": response_data, "ts": time.time()}
-
-    return jsonify(response_data)
+@app.route('/api/yf_test')
+def yf_test():
+    import traceback
+    try:
+        ticker = yf.Ticker("RELIANCE.NS")
+        df = ticker.history(period="1mo", interval="1d", auto_adjust=True)
+        return jsonify({
+            "status": "success",
+            "empty": bool(df.empty),
+            "length": len(df),
+            "tail": df.tail(1).to_dict() if not df.empty else "None",
+            "tz": str(df.index.tz) if not df.empty else "None"
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "trace": traceback.format_exc()})
 
 @app.route('/api/history', methods=['GET'])
 def get_history():
