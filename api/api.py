@@ -444,7 +444,7 @@ CACHES = {
     "boschoch_bull": {"data": None, "ts": 0},
     "boschoch_bear": {"data": None, "ts": 0},
 }
-CACHE_DURATION = 3600
+CACHE_DURATION = 0  # Disabled for live testing
 
 # ─────────────────────────────────────────────
 # API ROUTES
