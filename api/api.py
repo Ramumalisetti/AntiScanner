@@ -377,8 +377,8 @@ def analyze_darvax_worker(stock):
         print(f"DarvaX worker error ({stock['sym']}): {e}")
     return None
 
-def analyze_boschoch_worker(stock):
-    """Generic BOS CHOCH worker."""
+def _boschoch_worker(stock, setup_filter):
+    """Generic BOS CHOCH worker helper."""
     if not boschoch_analyze:
         return None
     try:
@@ -386,7 +386,7 @@ def analyze_boschoch_worker(stock):
         df = ticker.history(period="1y", interval="1d", auto_adjust=True)
         if df.empty or len(df) < 100:
             return None
-        bc = boschoch_analyze(df, stock["sym"])
+        bc = boschoch_analyze(df, stock["sym"], setup_filter=setup_filter)
         if bc and len(bc) > 0:
             # Pick the most recent (last in list)
             setup = sorted(bc, key=lambda x: x.get("BOS Strength Score", 0), reverse=True)[0]
@@ -408,6 +408,14 @@ def analyze_boschoch_worker(stock):
         print(f"BOS CHOCH worker error ({stock['sym']}): {e}")
     return None
 
+def analyze_boschoch_bull_worker(stock):
+    """BOS CHOCH BULL — Bullish Reversal (LONG setups only)."""
+    return _boschoch_worker(stock, 'LONG')
+
+def analyze_boschoch_bear_worker(stock):
+    """BOS CHOCH BEAR — Bearish Reversal (SHORT setups only)."""
+    return _boschoch_worker(stock, 'SHORT')
+
 # ─────────────────────────────────────────────
 # CACHES (per strategy)
 # ─────────────────────────────────────────────
@@ -415,7 +423,8 @@ CACHES = {
     "confluence":    {"data": None, "ts": 0},
     "priyank":       {"data": None, "ts": 0},
     "darvax":        {"data": None, "ts": 0},
-    "boschoch":      {"data": None, "ts": 0},
+    "boschoch_bull": {"data": None, "ts": 0},
+    "boschoch_bear": {"data": None, "ts": 0},
 }
 CACHE_DURATION = 3600
 
@@ -502,20 +511,42 @@ def run_scan():
             "picks": top_picks,
         }
 
-    elif strategy == "boschoch":
+    elif strategy == "boschoch_bull":
         results = []
         with ThreadPoolExecutor(max_workers=30) as ex:
-            futures = {ex.submit(analyze_boschoch_worker, s): s for s in UNIVERSE}
+            futures = {ex.submit(analyze_boschoch_bull_worker, s): s for s in UNIVERSE}
             for f in as_completed(futures):
                 r = f.result()
                 if r:
                     results.append(r)
         results.sort(key=lambda x: (-x["score"], x["sym"]))
-        top_picks = results[:10]  # Return top 10 combined
+        top_picks = results[:5]
         elapsed = round(time.time() - t0, 1)
         response_data = {
             "status": "success",
-            "strategy": "boschoch",
+            "strategy": "boschoch_bull",
+            "scan_time": scan_time,
+            "elapsed": elapsed,
+            "scanned": len(UNIVERSE),
+            "found": len(results),
+            "nifty50": nifty,
+            "picks": top_picks,
+        }
+
+    elif strategy == "boschoch_bear":
+        results = []
+        with ThreadPoolExecutor(max_workers=30) as ex:
+            futures = {ex.submit(analyze_boschoch_bear_worker, s): s for s in UNIVERSE}
+            for f in as_completed(futures):
+                r = f.result()
+                if r:
+                    results.append(r)
+        results.sort(key=lambda x: (-x["score"], x["sym"]))
+        top_picks = results[:5]
+        elapsed = round(time.time() - t0, 1)
+        response_data = {
+            "status": "success",
+            "strategy": "boschoch_bear",
             "scan_time": scan_time,
             "elapsed": elapsed,
             "scanned": len(UNIVERSE),
