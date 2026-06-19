@@ -41,8 +41,19 @@ except Exception as e:
     import_errors['boschoch'] = traceback.format_exc()
     boschoch_analyze = None
 
-app = Flask(__name__)
+# Initialize Flask to serve static files from the 'static' directory
+app = Flask(__name__, static_folder='static', static_url_path='/')
 CORS(app)
+
+# Serve the React frontend for the root route and any unmatched routes
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path):
+    import os
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return app.send_static_file(path)
+    else:
+        return app.send_static_file('index.html')
 
 def clean_numpy(obj):
     if isinstance(obj, (np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):

@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: antiscanner
+    env: docker
+    region: oregon # You can change this to frankly whatever region you prefer
+    plan: free # Can upgrade to basic or standard if you want better performance
+    healthCheckPath: /api/history # Simple endpoint to ensure the Python API booted
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: PYTHONUNBUFFERED
+        value: 1
