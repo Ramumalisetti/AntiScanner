@@ -3,7 +3,8 @@
   "outputDirectory": "dashboard/dist",
   "functions": {
     "api/api.py": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "api/*.py"
     }
   },
   "rewrites": [
