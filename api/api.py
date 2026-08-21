@@ -14,6 +14,14 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 
+import threading
+
+# Isolate yfinance cache per process AND per thread to prevent SQLite "database is locked" errors during high concurrency
+try:
+    yf.set_tz_cache_location(":memory:")
+except Exception:
+    pass
+
 # Ensure local directory is in sys.path so Vercel can import sibling modules
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
