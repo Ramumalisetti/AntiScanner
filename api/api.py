@@ -68,6 +68,8 @@ def clean_numpy(obj):
         return int(obj)
     elif isinstance(obj, (np.float16, np.float32, np.float64)):
         return float(obj)
+    elif isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
     elif isinstance(obj, dict):
